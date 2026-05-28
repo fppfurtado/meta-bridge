@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 — 2026-05-28
+
+### Fixed
+
+- **`suggest_journal_close` hook output não aparecia ao operador no CLI normal**. v0.1.0-v0.1.4 declararam mecânica de entrega como `sys.stderr.write(msg)` + exit 0. Stop hook stderr com exit 0 é **silenciado por design** pelo Claude Code TUI normal — só visível em `--debug` mode (documentado em [anthropics/claude-code #34600](https://github.com/anthropics/claude-code/issues/34600)). Validação manual da Onda 4 do meta-system (Sessão 6) Cenário 8 detectou via `/debug`: script funcionava standalone (probe com payload sintético via stdin printa em stderr corretamente), mas no fluxo real do CC operador não via nada. Fix: substituir `sys.stderr.write(msg)` por `print(json.dumps({"systemMessage": msg}))` em `hooks/suggest_journal_close.py:72-75`. Mecânica canonical do CC 2.1.x pra hook influenciar UI não-bloqueante (`systemMessage` standalone, sem `decision: "block"` que forçaria CC a continuar). Atualiza docstring + ADR-001 Sub-decisão 6 linha 188 + § Adendo (2026-05-28) documentando root cause e fix. Gates triplos e conteúdo da mensagem preservados.
+
 ## 0.1.4 — 2026-05-28
 
 ### Fixed

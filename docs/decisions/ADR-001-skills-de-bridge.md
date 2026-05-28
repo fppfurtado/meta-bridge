@@ -185,7 +185,7 @@ Mecânica: hook recebe stdin JSON com `session_id`, `transcript_path`, `cwd`, `h
 2. `<cwd>/.claude/local/` exists (signal de uso do toolkit no projeto).
 3. `~/Notes/logseq/` exists AND `pgrep -xi logseq` retorna não-zero (desktop fechado — pode escrever no graph sem race).
 
-Todos os 3 → print mensagem soft em stderr: `💡 Considere /journal-close pra sintetizar a sessão no journal de hoje.` Qualquer gate falha → exit 0 silente.
+Todos os 3 → emit JSON `{"systemMessage": "💡 Considere /journal-close pra sintetizar a sessão no journal de hoje."}` em stdout (mecânica canonical não-bloqueante do CC 2.1.x; stderr seria silenciado salvo `--debug`). Qualquer gate falha → exit 0 silente.
 
 Binding:
 ```json
@@ -206,6 +206,19 @@ Binding:
 ```
 
 **Refinamento futuro de marker stale** (se materializar): hook grava `<session_id>:<timestamp>` em `~/.claude/.hook-last-marker-seen.json` ao fires; próxima invocação ignora marker em `tail -n 50` se já consumido para mesmo session_id. Não implementado nesta versão. Gatilho: ≥2 reports de sugestão soft fora de contexto pós-`/run-plan`.
+
+#### Adendo (2026-05-28) — output mechanism: stderr → JSON systemMessage stdout
+
+v0.1.0/0.1.1/0.1.2/0.1.3/0.1.4 declararam "print mensagem soft em stderr" como mecânica de entrega ao operador. Validação manual da Onda 4 (Sessão 6) Cenário 8 esperava ver mensagem no CLI ao fim do turn em que marker era emitido — script validado standalone funcionou (stderr conteúdo correto), mas operador **não viu nada**. `/debug` isolou root cause via pesquisa em docs do Claude Code (`code.claude.com/docs/en/hooks`) + GitHub issue [anthropics/claude-code #34600](https://github.com/anthropics/claude-code/issues/34600): Stop hook stderr com exit 0 é **silenciado por design** no CLI TUI normal — só visível em `--debug` mode.
+
+Mecânica canonical pra hook influenciar UI em CC 2.1.x: JSON na stdout com fields documentados. Pra notify-style não-bloqueante (sem reabrir turn), o field correto é `systemMessage` standalone (sem `decision: "block"`, que forçaria CC a continuar — anti-pattern pra sugestão soft).
+
+Fix em v0.1.5 (refinamento mecânico — decisão central intacta, gates triplos preservados, conteúdo da mensagem inalterado):
+
+- `hooks/suggest_journal_close.py:72-75`: `sys.stderr.write(msg)` → `print(json.dumps({"systemMessage": msg}))`.
+- Docstring atualizada (linhas 5-6 + 15-17) refletindo mecânica nova e citando o issue.
+
+Sem ADR novo: decisão estrutural (Stop event hook, gates triplos, marker contract) intacta — só forma de output muda. Linha 188 atualizada com sumário.
 
 ### Sub-decisão 7 — `pgrep` semantics
 

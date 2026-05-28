@@ -3,9 +3,9 @@
 
 Reads a Stop-event JSON payload from stdin (Claude Code hook). When the
 `/run-plan` skill of the `pragmatic-dev-toolkit` plugin ends emitting marker
-`[PRAGMATIC: plan-done]` in the transcript tail, prints a soft suggestion
-to stderr nudging the operator toward `/journal-close`. Auto-gating triplo
-per ADR-001 Sub-decisão 6:
+`[PRAGMATIC: plan-done]` in the transcript tail, emits a non-blocking soft
+suggestion via JSON `{"systemMessage": "..."}` on stdout nudging the operator
+toward `/journal-close`. Auto-gating triplo per ADR-001 Sub-decisão 6:
 
 1. Marker `[PRAGMATIC: plan-done]` present in last 50 transcript lines.
 2. `.claude/local/` exists in cwd (operator uses the toolkit).
@@ -13,8 +13,9 @@ per ADR-001 Sub-decisão 6:
    returns non-zero) — race safety per ADR-005 of meta-system. Case-insensitive
    because the AppImage binary registers as `Logseq` (capital L), not `logseq`.
 
-Any gate fails → exit 0 silent. All pass → print message to stderr (does
-not block).
+Any gate fails → exit 0 silent. All pass → print JSON `{"systemMessage": ...}`
+to stdout (CC 2.1.x canonical for non-blocking soft notification; stderr would
+be silenced unless `--debug` per anthropics/claude-code #34600).
 """
 import json
 import os
@@ -70,9 +71,9 @@ def main() -> int:
         # would refuse anyway).
         return 0
 
-    sys.stderr.write(
-        "💡 Considere /journal-close pra sintetizar a sessão no journal de hoje.\n"
-    )
+    print(json.dumps({
+        "systemMessage": "💡 Considere /journal-close pra sintetizar a sessão no journal de hoje."
+    }))
     return 0
 
 
