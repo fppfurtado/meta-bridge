@@ -56,6 +56,24 @@ Sem flag `--local`, sem dual mode — `/note` do `pragmatic-dev-toolkit` cobre o
 
 Sem argumento → recusa silenciosa com mensagem `/journal-note exige conteúdo; use /journal-note "<nota>"`.
 
+#### Adendo v0.2.0 (2026-05-28) — retrofit pra hashtag-bucket + GTD nativo
+
+Materializa [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-006-logseq-pkm-cross-domain-via-gtd-e-hashtag-buckets.md) (3 invariantes: top-level `- #<domínio>` + markers nativos + sub-bullets free-form) + [ADR-002 do logseq-notes](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) Sub-decisões 1, 3, 4, 5. Refinamento mecânico (decisão central intacta — skill ainda escreve no journal de hoje; muda só o **formato** do write).
+
+Refinamentos do diff v0.1.x → v0.2.0 (lista descritiva, não mapeamento 1:1 com Steps da v0.2.0):
+
+- **Step "gate git repo" removido**: cwd fora de git agora cai em prompt enum — domínios não-repo (`#thought`, `#draft`, `#idea`, ad-hoc via Other) são cidadões legítimos per ADR-006 § Decisão § 1.
+- **Derivação de domínio**: probe ordenado novo (cwd git repo → basename; senão → AskUserQuestion enum com sanitização kebab-case lowercase no caminho Other per ADR-002 Sub-decisão 3 — mitigação direta do risco de hashtag proliferation citado em ADR-006 § Limitações).
+- **Find-or-create bucket top-level `- #<domínio>`**: substitui o append flat de v0.1.x. Probe regex `^- #<domínio>($| )` restringe a top-level. Idempotente: mesma tag no mesmo dia reusa o bucket existente.
+- **Format do child**: input com marker prefix uppercase (`TODO `/`DOING `/`WAITING `/`DONE `/`CANCELLED `) preserva como marker do bloco Logseq nativo per ADR-002 Sub-decisão 4; senão child plain.
+- **Sub-bullets mecânicos**: scan limitado por 2 patterns (`commit:<hash>`, `plan:<slug>`) extraídos como nested sub-bullets sem destruir inline reference no body. `[[<page>]]` cross-refs ficam inline. Resto do input é prosa livre per ADR-006 § Decisão § 3.
+- **Timestamp UTC removido do bloco**: v0.1.x prepended timestamp ao bloco top-level. Pós-retrofit, top-level é tag (bucket); timestamp por capture vira ruído e duplica metadata do filename do journal.
+- **Template ausente warning**: comportamento mantido (bootstrap journal vazio se template ausente). Sem mudança.
+
+Pré-condições v0.2.0 herdadas intactas: `pgrep -xi logseq` gate (Sub-decisão 7 + Adendo v0.1.2), failure-closed; conteúdo vazio → recusa silenciosa.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (skill `/journal-note` escreve no journal de hoje); sem categoria nova (refina mecanismo de write); sem restrição externa nova; caráter explicativo + refinamento.
+
 ### Sub-decisão 2 — Template insertion: literal append
 
 Skills da Bridge que consomem templates do graph (`session-close.md`, `weekly-review.md`) **lêem o `.md` como filesystem markdown**, parseiam placeholders (regex `<([a-z][a-z0-9-]+)>`), substituem com valores resolvidos, e fazem **append literal** no journal/page destino.
