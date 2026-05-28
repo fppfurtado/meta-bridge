@@ -117,13 +117,29 @@ Passos:
 3. Resolve cluster/subcluster. **Paths absolutos hardcoded**:
    - `MRCONFIG_PATH = ~/.mrconfig` (canonical pela convenção do `mr`).
    - `REPOS_MD_PATH = ~/Projects/meta-system/REPOS.md` (canonical pela arquitetura meta-system).
-   - Sequência: (i) `awk -v p="[$REPO_PATH]" '$0==p,/^\[/' $MRCONFIG_PATH | grep -m1 "^tags = "` → cluster/subcluster direto (match literal evita injeção de regex); (ii) parse `REPOS_MD_PATH` por basename do repo; (iii) AskUserQuestion `Cluster` enum com 9 opções de ADR-003 do meta-system.
+   - Sequência: (i) iterar headers `[<path>]` do mrconfig, expandir `$HOME` via `eval echo`, resolver symlinks via `readlink -f` em ambos lados, comparar paths normalizados; match → extract `tags = ...` via flag-pattern awk; (ii) parse `REPOS_MD_PATH` por basename via grep tabela markdown (`^| \`<basename>\``) + último `^## <cluster>` antes; (iii) AskUserQuestion `Cluster` enum com 9 opções de ADR-003 do meta-system. Mecânica concreta no SKILL.md Step 3.
 4. Lê `CLAUDE.md` + `README.md` do cwd (até primeiro `##` OU EOF, max 200 chars). Ambos ausentes/sem-corpo → `description` = vazio (sem populate, sem warning).
 5. Resolve Project Page path: `~/Notes/logseq/pages/<basename>.md`.
    - **Ausente**: cria preenchendo `Project Template.md` body. Props (`type:: #project`, `cluster::`, `subcluster::`, `status:: #active`, `repo-path::`, `repo-host::`) + seções (`## Last journal entries`, `## Follow-ups` vazia, `## Decisões locais` vazia).
    - **Presente**: atualização cirúrgica — sobrescreve apenas linhas com props mecânicas (regex `^\s*(cluster|subcluster|repo-path|repo-host)::\s*`). Linhas não-encontradas → adicionar na **ordem canonical** (cluster, subcluster, repo-path, repo-host) após primeira prop existente. Preserva `status::`, blocos sob `## Follow-ups`, `## Decisões locais`, e qualquer prop humana adicional.
 
 **Critério "prop mecânica"**: 4 props fixas exhaustivo. Extensão futura: nova prop mecânica no `Project Template.md` exige adendo neste ADR estendendo a lista.
+
+#### Adendo (2026-05-28) — probe ordenada de cluster: correção do Step 3
+
+v0.1.0/0.1.1/0.1.2 declararam Step 3 sequência como (i) `awk -v p="[$REPO_PATH]" '$0==p,/^\[/' $MRCONFIG_PATH | grep -m1 "^tags = "`; (ii) grep `^- \[<basename>\]` em REPOS.md; (iii) operator prompt. Validação manual da Onda 4 do meta-system (Sessão 6) detectou que (i) e (ii) **sempre falhavam**, fazendo skill cair invariavelmente pro fallback (iii) — funcional mas violando intent doutrinário de auto-discovery via inventory layer. Bugs:
+
+1. **mrconfig literal mismatch**: `$REPO_PATH` vem resolvido por `git rev-parse --show-toplevel` (`/storage/dev/projects/<repo>`), enquanto `.mrconfig` headers usam `[$HOME/Projects/<repo>]` literal (não-expandido). Comparação literal awk nunca bate quando `~/Projects` é symlink pra `/storage/dev/projects/`.
+2. **awk range pattern single-line bug**: pattern `$0==p,/^\[/` é range begin..end. Header satisfaz `$0==p` E `/^\[/` na mesma linha — range fecha imediatamente. Mesmo se path comparison batesse, `tags = ` da linha seguinte nunca seria capturado.
+3. **REPOS.md format mismatch**: spec assume bullet `^- \[<basename>\]` mas REPOS.md atual usa formato tabela markdown `| \`<basename>\` | <path> | ...`. Grep pattern nunca bate.
+
+Fix em v0.1.3 (refinamento mecânico — decisão central intacta, probe permanece 3-fases ordenadas + fallback prompt):
+
+1. mrconfig: iterar headers via shell loop, expandir `$HOME` via `eval echo`, resolver symlinks via `readlink -f` em ambos lados, comparar paths normalizados. Match → extract `tags = ...` via flag-pattern awk (`$0==p{flag=1;next} /^\[/{flag=0} flag && /^tags = /{print;exit}`) que evita o range single-line bug.
+2. REPOS.md: `grep -n "^| \`<basename>\`"` localiza linha + `head -n LINE | grep "^## " | tail -1` pega último cluster heading antes.
+3. Operator prompt: inalterado.
+
+Sem ADR novo: a decisão estrutural (probe ordenada 3-fases, fallback prompt) está intacta — só a implementação dos probes (i) e (ii) é corrigida. Linha 120 deste ADR atualizada com sequência sumária correta; mecânica concreta no SKILL.md Step 3.
 
 ### Sub-decisão 5 — `/weekly-review` parsing via headings em journals
 

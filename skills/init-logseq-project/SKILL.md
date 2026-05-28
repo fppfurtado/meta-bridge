@@ -40,8 +40,29 @@ Paths absolutos constants:
 
 Sequência:
 
-1. **mrconfig lookup**: `awk -v p="[$REPO_PATH]" '$0==p,/^\[/' $MRCONFIG_PATH | grep -m1 "^tags = "` → linha `tags = <cluster> [<subcluster>]`. Parse cluster (primeiro token) + subcluster (segundo token, opcional). Match → cluster/subcluster set, skip pra Step 4. Path comparison é **literal** (não regex) — chars `[`/`]`/espaços/`.` em `$REPO_PATH` são tratados como literais via awk equality.
-2. **REPOS.md fallback**: `grep -B5 "^- \[$REPO_BASENAME\]" $REPOS_MD_PATH | grep "^## "` → extract heading que precede a linha do repo. Heading pattern `^## <cluster>` (case-insensitive). Match → cluster set, subcluster = vazio. File absent → skip pra (3).
+1. **mrconfig lookup** (path-normalized iteration): `.mrconfig` headers usam paths não-expandidos (ex.: `[$HOME/Projects/<repo>]`), enquanto `$REPO_PATH` do Step 2 vem resolvido por `git rev-parse --show-toplevel` (ex.: `/storage/dev/projects/<repo>` quando `~/Projects` é symlink). Comparação literal falha — normalizar ambos. Mecânica:
+   ```bash
+   TARGET=$(readlink -f "$REPO_PATH")
+   FOUND_HEADER=""
+   while read -r LINE; do
+     if [[ "$LINE" =~ ^\[(.+)\]$ ]]; then
+       HEADER_PATH=$(eval echo "${BASH_REMATCH[1]}")
+       HEADER_RESOLVED=$(readlink -f "$HEADER_PATH" 2>/dev/null)
+       [ "$HEADER_RESOLVED" = "$TARGET" ] && { FOUND_HEADER="${BASH_REMATCH[1]}"; break; }
+     fi
+   done < "$MRCONFIG_PATH"
+   ```
+   Match → extract `tags = <cluster> [<subcluster>]` via flag-pattern awk (range pattern `$0==p,/^\[/` seria single-line porque header satisfaz ambos endpoints):
+   ```bash
+   awk -v p="[$FOUND_HEADER]" '$0==p {flag=1; next} /^\[/ {flag=0} flag && /^tags = / {print; exit}' "$MRCONFIG_PATH"
+   ```
+   Parse cluster (primeiro token após `tags = `) + subcluster (segundo, opcional). Match → cluster/subcluster set, skip pra Step 4.
+2. **REPOS.md fallback** (tabela markdown lookup): REPOS.md usa formato tabela (`| \`<basename>\` | <path> | <descrição> | <status> | <host> |`) com heading `## <cluster>` precedendo cada seção tabular. Mecânica:
+   ```bash
+   LINE_NUM=$(grep -n "^| \`${REPO_BASENAME}\`" "$REPOS_MD_PATH" | head -1 | cut -d: -f1)
+   [ -n "$LINE_NUM" ] && CLUSTER=$(head -n "$LINE_NUM" "$REPOS_MD_PATH" | grep "^## " | tail -1 | sed 's/^## //')
+   ```
+   Match → cluster set, subcluster = vazio. Path ausente OU basename sem entry → skip pra (3).
 3. **Operator prompt fallback**: `AskUserQuestion` header `Cluster`, enum com 9 opções de ADR-003 do meta-system (`meta`, `env-stack`, `dev-toolkit`, `cognitive`, `finance`, `work`, `pro-bono`, `learning`, `life`). Sem Recommended (depende do contexto runtime). Operador escolhe. Subcluster = vazio.
 
 ### 4. Lê CLAUDE.md + README.md
@@ -104,4 +125,4 @@ Exit.
 - Não inventa `subcluster::` quando probe não retorna — campo vazio é semanticamente válido (operador edita manual se precisar).
 - Não toca `Project Template.md` — template é source-of-truth; skill é consumer.
 - Não cria entry em `.mrconfig` ou REPOS.md — Bridge unidirecional per ADR-005 (graph é destino, não source).
-- Não usar regex em `$REPO_PATH` ao lookup `.mrconfig` — match é literal (awk equality), não regex (paths podem conter `[`, `]`, `.`, espaços).
+- Não usar regex em `$REPO_PATH` ao lookup `.mrconfig` — match é literal-equality entre paths normalizados via `readlink -f` (paths podem conter `[`, `]`, `.`, espaços; iteração + normalização cobre `$HOME` não-expandido em headers).

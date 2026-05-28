@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 — 2026-05-28
+
+### Fixed
+
+- **`/init-logseq-project` Step 3 probe ordenada sempre falhava nos 2 primeiros fallbacks**, fazendo skill cair invariavelmente pro operator prompt (Step 3.3) — funcional mas violando intent doutrinário de auto-discovery via inventory layer. 3 bugs encadeados: (i) **mrconfig literal mismatch**: `$REPO_PATH` resolvido por `git rev-parse --show-toplevel` (ex.: `/storage/dev/projects/<repo>`) vs `.mrconfig` headers `[$HOME/Projects/<repo>]` literal não-expandido — comparação literal nunca batia; (ii) **awk range pattern single-line bug**: `$0==p,/^\[/` é range begin..end, e o header satisfaz ambos endpoints na mesma linha — `tags = ` da linha seguinte nunca era capturado mesmo se path bate; (iii) **REPOS.md format mismatch**: spec assumia bullet `^- \[<basename>\]` mas REPOS.md usa formato tabela markdown `| \`<basename>\` | ...`. Bug detectado na validação manual da Onda 4 do meta-system (Sessão 6). Fix: (i) iterar headers do mrconfig, expandir `$HOME` via `eval echo`, resolver symlinks via `readlink -f` em ambos lados, comparar paths normalizados; (ii) extrair `tags = ` via flag-pattern awk (`$0==p{flag=1;next} /^\[/{flag=0} flag && /^tags = /{print;exit}`) evitando o range single-line; (iii) grep `^| \`<basename>\`` em REPOS.md + último `^## <cluster>` antes via `head -n LINE | grep "^## " | tail -1`. Atualiza `skills/init-logseq-project/SKILL.md` Step 3 + Step "## O que NÃO fazer" + ADR-001 Sub-decisão 4 linha 120 sumária + § Adendo (2026-05-28) documentando os 3 bugs e mecânica de fix.
+
 ## 0.1.2 — 2026-05-28
 
 ### Fixed

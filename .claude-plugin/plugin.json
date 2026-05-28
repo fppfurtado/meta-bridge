@@ -1,6 +1,6 @@
 {
   "name": "meta-bridge",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Claude Code plugin materializing the bridge between Claude Code sessions and a Logseq cognitive graph. Skills for journal capture, session synthesis, repo→Project Page sync, and GTD weekly review. Personal-workflow plugin — assumes Logseq at ~/Notes/logseq/ with daily-journal heading convention.",
   "author": {
     "name": "Fernando Furtado",
