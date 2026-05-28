@@ -1,0 +1,30 @@
+{
+  "name": "fppfurtado-meta-bridge",
+  "metadata": {
+    "description": "Curated marketplace for Fernando Furtado's meta-bridge plugin — Claude Code ↔ Logseq cognitive hub."
+  },
+  "owner": {
+    "name": "Fernando Furtado",
+    "email": "fppfurtado@outlook.com"
+  },
+  "plugins": [
+    {
+      "name": "meta-bridge",
+      "description": "Bridge skills + hook materializing Camada 3 between Claude Code sessions and a Logseq cognitive graph. /journal-note for inline capture; /journal-close for session synthesis; /init-logseq-project for repo→Project Page sync; /weekly-review GTD wizard; suggest_journal_close hook reacting to pragmatic-dev-toolkit's /run-plan completion marker.",
+      "author": {
+        "name": "Fernando Furtado",
+        "email": "fppfurtado@outlook.com",
+        "url": "https://github.com/fppfurtado"
+      },
+      "category": "personal-tooling",
+      "source": {
+        "source": "github",
+        "repo": "fppfurtado/meta-bridge",
+        "ref": "main"
+      },
+      "homepage": "https://github.com/fppfurtado/meta-bridge",
+      "version": "0.1.0",
+      "tags": ["logseq", "journal", "pkm", "gtd", "bridge", "personal-tooling"]
+    }
+  ]
+}

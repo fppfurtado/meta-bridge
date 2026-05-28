@@ -1,0 +1,18 @@
+{
+  "description": "Stop event hook suggesting /journal-close when pragmatic-dev-toolkit's /run-plan emits its canonical done marker. Auto-gating triplo per ADR-001 Sub-decisão 6 (marker + .claude/local/ + Logseq desktop closed).",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "description": "Timeout 5s — auto-gating triplo (marker + .claude/local/ + Logseq desktop fechado); silent fora do contexto.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_journal_close.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

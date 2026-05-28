@@ -1,0 +1,14 @@
+{
+  "name": "meta-bridge",
+  "version": "0.1.0",
+  "description": "Claude Code plugin materializing the bridge between Claude Code sessions and a Logseq cognitive graph. Skills for journal capture, session synthesis, repo→Project Page sync, and GTD weekly review. Personal-workflow plugin — assumes Logseq at ~/Notes/logseq/ with daily-journal heading convention.",
+  "author": {
+    "name": "Fernando Furtado",
+    "email": "fppfurtado@outlook.com",
+    "url": "https://github.com/fppfurtado"
+  },
+  "homepage": "https://github.com/fppfurtado/meta-bridge",
+  "repository": "https://github.com/fppfurtado/meta-bridge",
+  "license": "MIT",
+  "keywords": ["logseq", "journal", "pkm", "gtd", "bridge", "personal-tooling"]
+}
