@@ -120,7 +120,7 @@ Passos:
    - Sequência: (i) iterar headers `[<path>]` do mrconfig, expandir `$HOME` via `eval echo`, resolver symlinks via `readlink -f` em ambos lados, comparar paths normalizados; match → extract `tags = ...` via flag-pattern awk; (ii) parse `REPOS_MD_PATH` por basename via grep tabela markdown (`^| \`<basename>\``) + último `^## <cluster>` antes; (iii) AskUserQuestion `Cluster` enum com 9 opções de ADR-003 do meta-system. Mecânica concreta no SKILL.md Step 3.
 4. Lê `CLAUDE.md` + `README.md` do cwd (até primeiro `##` OU EOF, max 200 chars). Ambos ausentes/sem-corpo → `description` = vazio (sem populate, sem warning).
 5. Resolve Project Page path: `~/Notes/logseq/pages/<basename>.md`.
-   - **Ausente**: cria preenchendo `Project Template.md` body. Props (`type:: #project`, `cluster::`, `subcluster::`, `status:: #active`, `repo-path::`, `repo-host::`) + seções (`## Last journal entries`, `## Follow-ups` vazia, `## Decisões locais` vazia).
+   - **Ausente**: cria preenchendo `Project Template.md` body. Props (`type:: #project`, `cluster::`, `subcluster::`, `status:: #active`, `repo-path::`, `repo-host::`) + seções (`## Last journal entries`, `## Follow-ups` vazia, `## Decisões locais` vazia). 2 transformações sobre body: (a) **dedent 1 tab fixo** removendo indent wrapper de template-children; (b) **substituir macro `<% current page %>`** por `[[<basename>]]` literal (macro Logseq resolve só com desktop aberto). Mecânica concreta no SKILL.md Step 5.
    - **Presente**: atualização cirúrgica — sobrescreve apenas linhas com props mecânicas (regex `^\s*(cluster|subcluster|repo-path|repo-host)::\s*`). Linhas não-encontradas → adicionar na **ordem canonical** (cluster, subcluster, repo-path, repo-host) após primeira prop existente. Preserva `status::`, blocos sob `## Follow-ups`, `## Decisões locais`, e qualquer prop humana adicional.
 
 **Critério "prop mecânica"**: 4 props fixas exhaustivo. Extensão futura: nova prop mecânica no `Project Template.md` exige adendo neste ADR estendendo a lista.
@@ -140,6 +140,20 @@ Fix em v0.1.3 (refinamento mecânico — decisão central intacta, probe permane
 3. Operator prompt: inalterado.
 
 Sem ADR novo: a decisão estrutural (probe ordenada 3-fases, fallback prompt) está intacta — só a implementação dos probes (i) e (ii) é corrigida. Linha 120 deste ADR atualizada com sequência sumária correta; mecânica concreta no SKILL.md Step 3.
+
+#### Adendo (2026-05-28) — Step 5 create flow: dedent + macro substitution
+
+v0.1.0/0.1.1/0.1.2/0.1.3 declararam Step 5 (Ausente — criar do zero) como "preencher Project Template.md body" sem documentar 2 transformações necessárias entre template e page raíz. Validação manual da Onda 4 (Sessão 6) detectou os gaps via Cenário 6 (`/init-logseq-project` em repo dummy `/tmp/test-repo`). Gaps:
+
+1. **Indent wrapper**: `Project Template.md` tem props sob `- template:: project` com 1 tab inicial (`\t- type:: #project`, `\t  cluster::`, etc.) — estrutura wrapper de template Logseq. Page raíz canonical (ex.: `pages/drive-sync.md`) tem essas linhas no nível root, sem tab. Spec não dizia "dedent".
+2. **Macro Logseq**: template tem `{{query <% current page %>}}` (linha 12). Page raíz canonical tem `{{query [[<basename>]]}}` literal — macro resolveria via Logseq desktop em runtime, mas gate fecha desktop. Spec não dizia "substituir macro".
+
+Fix em v0.1.4 (refinamento mecânico — decisão central intacta):
+
+1. **Dedent 1 tab fixo** no body restante pós-skip de linhas wrapper (`type:: #template`, `- template:: project`, `template-including-parent:: false`). Remove exatamente 1 tab do começo de cada linha (linhas sem tab inicial passam inalteradas). Sub-bullets aninhados mantêm tab relativo.
+2. **Macro substitution** literal: `<% current page %>` → `[[<basename>]]`. Demais macros Logseq (`<% today %>`, `<% yesterday %>`, etc.) **não tocadas** — Project Template não usa hoje; expandir só se template ganhar nova macro (esta sub-decisão estende a lista por adendo se acontecer).
+
+Sem ADR novo: refinamento mecânico de "skill consome template como contract dual-papel (schema declarativo pra skill + insertion visual via desktop)" decidida em Sub-decisão 2. Linha 123 atualizada com sumário; mecânica concreta no SKILL.md Step 5.
 
 ### Sub-decisão 5 — `/weekly-review` parsing via headings em journals
 

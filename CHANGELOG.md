@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 — 2026-05-28
+
+### Fixed
+
+- **`/init-logseq-project` Step 5 create flow — spec não documentava 2 transformações entre template e page raíz**. v0.1.0/0.1.1/0.1.2/0.1.3 declararam Step 5 (Ausente — criar do zero) como "preencher Project Template.md body" sem dizer (a) **dedent**: `Project Template.md` tem props sob `- template:: project` com 1 tab inicial (estrutura wrapper de template Logseq), enquanto page raíz canonical (ex.: `pages/drive-sync.md`) tem essas linhas no nível root sem tab; (b) **macro substitution**: template tem `{{query <% current page %>}}` (macro Logseq que resolve via desktop) mas page raíz canonical tem `{{query [[<basename>]]}}` literal — macro vira string morta no markdown salvo com gate fechando desktop. Gaps detectados na validação manual da Onda 4 do meta-system (Sessão 6) via Cenário 6 (skill em repo dummy `/tmp/test-repo`). Fix: SKILL.md Step 5 ganha sub-steps explícitos (dedent 1 tab fixo no body pós-skip de linhas wrapper; substituir `<% current page %>` por `[[<basename>]]` literal; demais macros Logseq não tocadas) + ADR-001 Sub-decisão 4 linha 123 sumário + § Adendo (2026-05-28) documentando ambos gaps e mecânica de fix.
+
 ## 0.1.3 — 2026-05-28
 
 ### Fixed

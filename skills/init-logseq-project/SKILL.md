@@ -80,16 +80,17 @@ Probe existência via `test -f $PAGE_PATH`:
 **Ausente — criar do zero**:
 
 1. Lê template body: `~/Notes/logseq/pages/Project Template.md`. Template ausente → recusa com `Template "Project Template.md" ausente em ~/Notes/logseq/pages/ — feature requer setup do graph (Onda 3 do meta-sistema)`.
-2. Skip linhas `type:: #template`, `- template:: project`, `template-including-parent:: false`.
-3. Body restante (estrutura `- type:: #project` + props + `## Last journal entries` + `## Follow-ups` + `## Decisões locais`).
-4. Substitui props vazias com valores resolvidos:
+2. Skip linhas `type:: #template`, `- template:: project`, `template-including-parent:: false` (estrutura wrapper de template Logseq, não vai pra page raíz).
+3. **Dedent 1 tab fixo no body restante**: linhas que sobram do template vivem como filhos de `- template:: project` com 1 tab inicial (`\t- type:: #project`, `\t  cluster::`, `\t- ## Last journal entries`, etc.). Page raíz canonical (ex.: `pages/drive-sync.md`) tem essas linhas no nível root, sem tab inicial. Remover **exatamente 1 tab do começo** de cada linha (`sed 's/^\t//'` equivalente; linhas sem tab inicial passam inalteradas). Não mexer indentação aninhada (sub-bullets de `- ## Last journal entries` mantêm seu tab relativo).
+4. **Substituir macro Logseq `<% current page %>`** por `[[<REPO_BASENAME>]]` literal. Template usa a macro pra renderizar page-link via Logseq desktop em runtime; com gate fechando desktop, macro vira string morta no markdown. Page raíz canonical materializa o link concreto. Substituição é literal (sed-style); demais macros Logseq (`<% today %>`, etc.) **não tocadas** (Project Template não usa hoje; expandir só se template ganhar nova macro).
+5. Substitui props vazias com valores resolvidos:
    - `cluster::` → cluster do Step 3.
    - `subcluster::` → subcluster do Step 3 (ou vazio).
    - `status::` → `#active` (default per ADR-004 invariante; primeiro setup).
    - `repo-path::` → REPO_PATH do Step 2.
    - `repo-host::` → repo host do Step 2.
-5. Se `description` não-vazio: adicionar bullet `- description:: <description>` antes de `## Last journal entries` (primeira linha sob root).
-6. Write em `PAGE_PATH`.
+6. Se `description` não-vazio: adicionar bullet `- description:: <description>` antes de `## Last journal entries` (primeira linha sob root).
+7. Write em `PAGE_PATH`.
 
 **Presente — atualização cirúrgica idempotente**:
 
