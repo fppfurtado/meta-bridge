@@ -86,12 +86,20 @@ Passos:
    - **Repo basename**: `git rev-parse --show-toplevel | xargs basename`.
    - **Plan slug ativo**: probe ordenado — (i) variável env `PRAGMATIC_ACTIVE_PLAN_SLUG` exposta por `/run-plan` (gap conhecido — hoje sempre None nesta probe); (ii) probe `docs/plans/*.md` modified nas últimas 2 horas; (iii) None — campo vai como `—`.
    - **Mudanças (summary)**: `git log --since="2 hours ago" --oneline --no-merges`.
-3. AskUserQuestion única chamada (até 4 perguntas batched): Topic (free-text via Other), Decisões tomadas (enum + Other), Follow-ups (enum + Other).
+3. **Sintetizar rascunhos + confirmação** (adendo 2026-05-28 — ver § Adendo abaixo): skill (agente) extrai rascunhos de Topic candidates, Decisões e Follow-ups de session context (commits + conversation). AskUserQuestion única chamada com 3 enums presentando rascunhos pra confirmação: Topic (candidates + Other), Decisões (`Confirma rascunho` / `Edita via Other` / `Sem decisões — limpar rascunho`), Follow-ups (análogo). Rascunho vazio → enum cai pra binary `Confirma "sem"` / `Há — descrever via Other`.
 4. Compõe bloco **literal** seguindo schema de `session-close.md` (parse placeholders + substitui).
-5. Append no `~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md` sob seção `## Notes` (regex strict `^\t- ## Notes`; ausência → warning loud + append no fim).
+5. Append no `~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md` sob seção `## Notes` (regex strict `^- ## Notes` — top-level, zero tab; ausência → warning loud + append no fim).
 6. Reporta path tocado + bullets count.
 
 Falha clara se `session-close.md` ausente (`Template session-close.md ausente em ~/Notes/logseq/pages/ — feature requer setup do graph`).
+
+**Adendo 2026-05-28 (primeiro uso real)** — duas mecânicas refinadas:
+
+(a) **Regex `^- ## Notes` (zero tab)**: SKILL original tinha `^\t- ## Notes` (1 tab). Primeiro uso real falhou — auto-apply do Logseq via `template-including-parent:: false` E mecânica de `/journal-note` (Sub-decisão 1 step 6) ambos produzem headings top-level (`- ## <heading>`, sem indent). Regex strict atualizada matche formato canonical. Análogo aplicado em Sub-decisão 5 (regex `^- ## Inbox/Doing/Waiting`).
+
+(b) **Synthesis-then-confirm** em vez de interview puro: SKILL original pedia operator descrever Decisões + Follow-ups do zero via AskUserQuestion Other. Operator flagou friction: agente que executa skill TEM acesso a session context — deveria sintetizar rascunhos e pedir confirmação em vez de interview. Topic continua candidate-based (já era). Decisões + Follow-ups viram draft-then-confirm (3 opções: Confirma rascunho / Edita via Other / Sem — limpar). Razão: reduz friction (operator não re-articula coisas já registradas em commits/conversation) e aproveita context disponível ao agente runtime.
+
+Adendo per [ADR-034](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério (todos 4 satisfeitos: decisão central intacta — /journal-close ainda sintetiza sessão em bloco no journal; sem nova categoria; sem restrição externa; caráter explicativo — refinamento de mecânica). Não-trivializa Topic (segue candidate-based via Other override).
 
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
@@ -128,7 +136,7 @@ Passos:
 1. Gate git repo + Logseq desktop (cheap-first).
 2. Coleta state via **parsing de headings padronizados** cross-journals:
    - **Janela**: `find ~/Notes/logseq/journals -name '*.md' -newermt '7 days ago' ! -newermt 'today'` (range [hoje-7d, hoje-1d]; exclui hoje pra evitar duplicação com bloco semanal appended em journal de hoje).
-   - **Inbox**: blocos sob heading `## Inbox` (regex linha estrita `^\t- ## Inbox`); filtros archived:: true sintaxe Logseq canonical (linha sub-indented).
+   - **Inbox**: blocos sob heading `## Inbox` (regex linha estrita `^- ## Inbox` — top-level, zero tab; coberto pelo adendo 2026-05-28 de Sub-decisão 3); filtros archived:: true sintaxe Logseq canonical (linha sub-indented).
    - **Doing / Next Actions**: blocos sob `## Doing`.
    - **Waiting**: blocos sob `## Waiting`.
    - **NÃO** filtrar por `status:: active` (essa property é lifecycle de Project Page per ADR-004 invariante; colapsar pegaria 18+ Project Pages como falsos Next Actions).

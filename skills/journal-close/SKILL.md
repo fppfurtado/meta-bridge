@@ -35,15 +35,39 @@ Sem argumentos. Skill coleta context da sessão CC corrente via probe do git + f
 - **Template path**: `~/Notes/logseq/pages/session-close.md`. Ausente → recusa com `Template session-close.md ausente em ~/Notes/logseq/pages/ — feature requer Onda 4 do meta-sistema (Bloco 1 commit 364465e no logseq-notes)`. Exit clean.
 - **Journal path**: `~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md`.
 
-### 3. AskUserQuestion — única chamada com 3 perguntas
+### 3. Sintetizar rascunhos + confirmação via AskUserQuestion
 
-Batch de 3 perguntas (per CLAUDE.md do `pragmatic-dev-toolkit` → AskUserQuestion mechanics; max 4):
+**Mecânica draft-then-confirm** (per ADR-001 Sub-decisão 3 adendo de 2026-05-28): operator não descreve Decisões/Follow-ups do zero. Skill (agente que executa) tem acesso a session context — conversation history + commits coletados no Step 2 — e **sintetiza rascunhos**, presentando pra confirmação. Reduz friction operacional.
 
-1. **Topic** — header `Topic`, question `Resumo curto da sessão (frase única)`. Sem enum default (free-text é a essência); resposta via Other per ADR-006 do toolkit (enum não cabe).
-2. **Decisões tomadas** — header `Decisões`, opcional: enum `Sem decisões nesta sessão` / `Há decisões — descrever`. Other → operador descreve em prosa.
-3. **Follow-ups** — header `Follow-ups`, opcional: enum `Sem follow-ups` / `Há follow-ups — descrever`. Other → operador lista em prosa.
+**Pré-passo (síntese pelo agente)**:
 
-Sub-coleta inline (não no enum): mudanças summary vazio do Step 2 → prompto via prosa livre adicional pra operador descrever em 1-2 frases.
+- **Topic candidate**: agente propõe 2-3 candidatos curtos baseados em commits + conversation thread (frase única cada). Operator pica ou Others. Caso comum: 1 dos candidates serve direto.
+- **Decisões draft**: agente extrai decisões estruturais de session context (commits message body, conversation onde operator autorizou trocas de direção, AskUserQuestion answers prévias da sessão). Output: lista de N bullets curtos (~5-10 palavras cada). Vazio → flag draft como "Sem decisões detectadas".
+- **Follow-ups draft**: análogo — extrai capture markers da sessão (TaskCreate com `[capture:*]`, follow-ups capturados em conversation, BACKLOG entries adicionadas). Vazio → "Sem follow-ups detectados".
+
+**Apresentação ao operador**: prosa antes da chamada AskUserQuestion enumera os rascunhos pra leitura (não dentro do enum — enum tem limite de label):
+
+```
+**Rascunho de Decisões** (extraído da sessão):
+- <decisão 1>
+- <decisão 2>
+...
+
+**Rascunho de Follow-ups** (extraído da sessão):
+- TODO <follow-up 1>
+- TODO <follow-up 2>
+...
+```
+
+**AskUserQuestion única chamada com 3 perguntas** (per CLAUDE.md do `pragmatic-dev-toolkit` → AskUserQuestion mechanics; max 4):
+
+1. **Topic** — header `Topic`. Options: candidates do pré-passo (2-3 enum labels) + Other auto pra free-text override.
+2. **Decisões** — header `Decisões`: enum `Confirma rascunho` / `Edita via Other` / `Sem decisões — limpar rascunho`. Other → operator substitui completamente em prosa. `Sem decisões — limpar rascunho` força clear do draft (skill detectou ruído).
+3. **Follow-ups** — header `Follow-ups`: enum análogo: `Confirma rascunho` / `Edita via Other` / `Sem follow-ups — limpar rascunho`.
+
+Rascunho vazio (skill detectou "Sem decisões detectadas") → enum cai pra 2 opções: `Confirma "sem decisões"` / `Há decisões — descrever via Other`. Mesma lógica pra Follow-ups.
+
+Sub-coleta inline: mudanças summary vazio do Step 2 → prompto via prosa livre adicional pra operator descrever em 1-2 frases.
 
 ### 4. Compor bloco literal seguindo schema
 
@@ -51,12 +75,12 @@ Lê template `session-close.md`. Parseia placeholders (`<topic>`, `<repo-page>`,
 
 Linhas que **não** são placeholders (Decisões tomadas e Follow-ups) seguem regras fixas:
 
-- Linha `- **Decisões tomadas:**`: resposta da pergunta 2 = `Sem decisões` ou None → preserva linha sem sub-bullets. `Há decisões — descrever` (Other) → append cada decisão como sub-bullet indented (`\t- <decisão>`).
-- Linha `- **Follow-ups:**`: resposta da pergunta 3 = `Sem follow-ups` ou None → preserva linha vazia + remove stub literal `- TODO ` do template. `Há follow-ups — descrever` (Other) → append cada follow-up como `\t- TODO <item>` substituindo o stub `- TODO ` original.
+- Linha `- **Decisões tomadas:**`: resposta da pergunta 2 = `Confirma rascunho` → append rascunho do Step 3 como sub-bullets indented (`\t- <decisão>`). `Edita via Other` → operator substituiu rascunho; append Other content como sub-bullets. `Sem decisões — limpar rascunho` ou `Confirma "sem decisões"` → preserva linha sem sub-bullets.
+- Linha `- **Follow-ups:**`: resposta da pergunta 3 análoga. `Confirma rascunho` ou `Edita via Other` → append cada follow-up como `\t- TODO <item>` substituindo o stub `- TODO ` original. `Sem follow-ups` → preserva linha vazia + remove stub literal `- TODO `.
 
 ### 5. Append no journal de hoje
 
-Journal path existe → append do bloco composto sob seção `## Notes` do daily-journal (skill localiza heading via regex estrita `^\t- ## Notes` e adiciona bloco como sub-item indented por 1 tab). Heading ausente nesse formato → append no fim do file E **reportar warning explícito no Step 6**: `heading "## Notes" não encontrada com formato canonical em <journal-path>; bloco appended no fim — verificar daily-journal template ou indentação`. Failure-closed per ADR-005 (warning loud, não silent fallback).
+Journal path existe → append do bloco composto sob seção `## Notes` do daily-journal (skill localiza heading via regex estrita `^- ## Notes` — top-level, zero tab — e adiciona bloco como sub-item indented por 1 tab). Heading ausente nesse formato → append no fim do file E **reportar warning explícito no Step 6**: `heading "## Notes" não encontrada com formato canonical em <journal-path>; bloco appended no fim — verificar daily-journal template ou indentação`. Failure-closed per ADR-005 (warning loud, não silent fallback). Regex top-level corresponde ao formato canonical pós-`template-including-parent:: false` do daily-journal template (Logseq auto-apply + `/journal-note` ambos produzem `- ## Notes` no nível raiz, sem indent).
 
 Journal ausente → criar via leitura do daily-journal template (mesma mecânica do `/journal-note`); append do bloco sob `## Notes`.
 

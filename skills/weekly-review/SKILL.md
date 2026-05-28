@@ -34,7 +34,7 @@ Resolve metadata:
 
 Para cada journal file na janela, parse 3 listas:
 
-- **Inbox**: blocos descendentes de heading `## Inbox` (regex linha estrita `^\t- ## Inbox`). Coleta blocos imediatamente abaixo até próximo heading sibling (`^\t- ## ` mesma indentação) ou EOF. Filtros (sintaxe Logseq canonical):
+- **Inbox**: blocos descendentes de heading `## Inbox` (regex linha estrita `^- ## Inbox` — top-level, zero tab, formato canonical pós-`template-including-parent:: false` do daily-journal). Coleta blocos imediatamente abaixo até próximo heading sibling (`^- ## ` mesma indentação) ou EOF. Filtros (sintaxe Logseq canonical):
   - (a) bloco-pai (heading) sem property `archived:: true` na linha imediatamente subsequente sub-indented por 1 tab adicional (`^\t\tarchived:: true`).
   - (b) bloco-filho sem property `archived:: true` análoga (linha do bloco ou linha imediatamente subsequente sub-indented).
 - **Doing / Next Actions**: blocos descendentes de `## Doing` (mesma mecânica).
