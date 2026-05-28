@@ -143,7 +143,7 @@ Hook `hooks/suggest_journal_close.py` + binding `Stop` event em `hooks/hooks.jso
 
 Mecânica: hook recebe stdin JSON com `session_id`, `transcript_path`, `cwd`, `hook_event_name`. Auto-gating triplo:
 
-1. Marker `[PRAGMATIC: plan-done]` em `tail -n 50 <transcript_path>` (signal de `/run-plan` do `pragmatic-dev-toolkit` terminou; marker é contract público emitido pelo toolkit ≥ v2.12.1 commit `b8989c2`).
+1. Marker `[PRAGMATIC: plan-done]` em `tail -n 50 <transcript_path>` (signal de `/run-plan` do `pragmatic-dev-toolkit` terminou; marker é contract público emitido pelo toolkit ≥ v2.13.0 commit `b8989c2`).
 2. `<cwd>/.claude/local/` exists (signal de uso do toolkit no projeto).
 3. `~/Notes/logseq/` exists AND `pgrep -x logseq` retorna não-zero (desktop fechado — pode escrever no graph sem race).
 
@@ -217,7 +217,7 @@ Implicação: skills da Bridge **não traversam Resolution protocol step 3** (op
 
 ### Trade-offs
 
-- **Hook depende de `pragmatic-dev-toolkit` ≥ v2.12.1 estar instalado**: silent fail se ausente (gate 1 não encontra marker). Documentado em README.
+- **Hook depende de `pragmatic-dev-toolkit` ≥ v2.13.0 estar instalado**: silent fail se ausente (gate 1 não encontra marker). Documentado em README.
 - **`/journal-close` plan slug detection é frágil**: probe (i) variável env não existe hoje (gap em toolkit). Mitigação: campo opcional, operador preenche manual via Other.
 - **Idempotência de `/init-logseq-project` falha se humano editar prop mecânica inline**: skill sobrescreve. Mitigação: critério exhaustivo (4 props), gatilho de revisão se padrão emergir.
 - **`/weekly-review` parsing de headings é frágil a sintaxe atípica**: blocos sob `## Inbox` que usem formatação não-padrão. Mitigação: skill falha clara com path do file que confundiu; parser conservador.

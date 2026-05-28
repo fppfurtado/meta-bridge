@@ -28,7 +28,7 @@ Companion to [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-d
 - **Logseq** desktop installed at `~/Notes/logseq/` (path is hardcoded — change requires patching skills).
 - The operator's daily-journal template with `## Inbox`, `## Doing`, `## Waiting`, `## Notes`, `## Decisions` headings (defined in the [logseq-notes](https://github.com/fppfurtado/logseq-notes) repo template).
 - Schema templates in `~/Notes/logseq/pages/`: `session-close.md`, `weekly-review.md`, `Project Template.md`, `daily-journal.md` (also from `logseq-notes`).
-- **Hook only**: [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit) ≥ v2.12.1 installed (for the `[PRAGMATIC: plan-done]` marker emission by `/run-plan`). Hook gates silent if marker absent.
+- **Hook only**: [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit) ≥ v2.13.0 installed (for the `[PRAGMATIC: plan-done]` marker emission by `/run-plan`). Hook gates silent if marker absent.
 
 Skills fail closed with clear messages when dependencies are missing — no silent corruption.
 
