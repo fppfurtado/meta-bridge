@@ -51,6 +51,8 @@ These paths are hardcoded in skills. Changing them requires patching the skills,
 ```yaml
 paths:
   decisions_dir: docs/decisions
+  version_files: [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json"]
+  changelog: CHANGELOG.md
 test_command: null
 ```
 
