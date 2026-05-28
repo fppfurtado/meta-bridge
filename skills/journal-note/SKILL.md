@@ -28,7 +28,7 @@ Sem argumento → recusa silenciosa com mensagem `/journal-note exige conteúdo;
 
 `git rev-parse --show-toplevel` retorna não-zero → recusa com `/journal-note exige git repo pra resolver repo basename`. Exit clean.
 
-`pgrep -x logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /journal-note (skill escreve direto no filesystem do graph)`. Exit clean.
+`pgrep -xi logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /journal-note (skill escreve direto no filesystem do graph)`. Exit clean.
 
 ### 2. Resolve metadata
 
@@ -60,4 +60,4 @@ Journal path + bytes adicionados + repo basename usado como ref. Exit.
 - Não auto-buscar contexto em journals de outros projetos — leitura cross-project é fenômeno conversacional via Read nativo do Claude com path absoluto.
 - Não fazer commit em logseq-notes — repo de notes tem ciclo próprio.
 - Não roteia se Logseq desktop aberto (pgrep gate). Falha fechada com mensagem clara.
-- Não tenta usar `pidof`, `ps -A | grep` em vez de `pgrep -x logseq` — canonical fixed per ADR-001 Sub-decisão 7.
+- Não tenta usar `pidof`, `ps -A | grep` em vez de `pgrep -xi logseq` — canonical fixed per ADR-001 Sub-decisão 7.

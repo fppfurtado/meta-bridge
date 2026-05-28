@@ -10,7 +10,7 @@ Companion to [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-d
 
 | Component | Type | What it does |
 |-----------|------|--------------|
-| `/journal-note <content>` | Skill | Appends a timestamped block to today's Logseq journal (`~/Notes/logseq/journals/YYYY_MM_DD.md`) with auto-detected `[[<repo-basename>]]` ref. Requires Logseq desktop closed (`pgrep -x logseq` gate). |
+| `/journal-note <content>` | Skill | Appends a timestamped block to today's Logseq journal (`~/Notes/logseq/journals/YYYY_MM_DD.md`) with auto-detected `[[<repo-basename>]]` ref. Requires Logseq desktop closed (`pgrep -xi logseq` gate). |
 | `/journal-close` | Skill | Synthesizes the current CC session into a structured block appended under `## Notes` in today's journal, following the `session-close.md` schema. Probes git log since 2h + plan slug + repo basename; prompts operator for topic + decisions + follow-ups via batched AskUserQuestion. |
 | `/init-logseq-project` | Skill | Creates or re-syncs the Project Page in the Logseq graph for the repo at cwd. Idempotent: preserves human-edited `status::`, `description::`, `## Follow-ups`, `## Decisões locais`; overwrites only 4 mechanical props (`cluster`, `subcluster`, `repo-path`, `repo-host`). Cluster resolution probes `~/.mrconfig` → `~/Projects/meta-system/REPOS.md` → operator enum. |
 | `/weekly-review` | Skill | GTD wizard aggregating Inbox/Doing/Waiting blocks from journals of the last 7 days (excluding today), prompting classification (Keep/Next step/Archive/Defer next Monday) batched 4-per-AskUserQuestion. Decisions accumulate in memory; edits apply atomically after composing the weekly block (failure-closed under crash mid-wizard). |

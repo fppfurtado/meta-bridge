@@ -22,7 +22,7 @@ Sem argumentos. Skill opera sobre `~/Notes/logseq/journals/` cross-files.
 
 `git rev-parse --show-toplevel` retorna não-zero → recusa com `/weekly-review exige git repo (cwd default é repo do operador; nenhum side-effect crítico mas mantém pattern)`. Exit clean.
 
-`pgrep -x logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /weekly-review (skill escreve direto no filesystem do graph)`. Exit clean.
+`pgrep -xi logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /weekly-review (skill escreve direto no filesystem do graph)`. Exit clean.
 
 ### 2. Coleta blocks via parsing de headings cross-journals
 

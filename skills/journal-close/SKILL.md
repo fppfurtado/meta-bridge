@@ -22,7 +22,7 @@ Sem argumentos. Skill coleta context da sessão CC corrente via probe do git + f
 
 `git rev-parse --show-toplevel` retorna não-zero → recusa com `/journal-close exige git repo (skill deriva repo basename do cwd)`. Exit clean.
 
-`pgrep -x logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /journal-close`. Exit clean.
+`pgrep -xi logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /journal-close`. Exit clean.
 
 ### 2. Coleta context
 

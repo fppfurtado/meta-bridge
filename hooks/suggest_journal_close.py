@@ -9,8 +9,9 @@ per ADR-001 Sub-decisão 6:
 
 1. Marker `[PRAGMATIC: plan-done]` present in last 50 transcript lines.
 2. `.claude/local/` exists in cwd (operator uses the toolkit).
-3. `~/Notes/logseq/` exists AND Logseq desktop NOT running (`pgrep -x logseq`
-   returns non-zero) — race safety per ADR-005 of meta-system.
+3. `~/Notes/logseq/` exists AND Logseq desktop NOT running (`pgrep -xi logseq`
+   returns non-zero) — race safety per ADR-005 of meta-system. Case-insensitive
+   because the AppImage binary registers as `Logseq` (capital L), not `logseq`.
 
 Any gate fails → exit 0 silent. All pass → print message to stderr (does
 not block).
@@ -58,7 +59,7 @@ def main() -> int:
         return 0
     try:
         pgrep = subprocess.run(
-            ["pgrep", "-x", "logseq"],
+            ["pgrep", "-xi", "logseq"],
             capture_output=True,
             timeout=2,
         )

@@ -38,7 +38,7 @@ Skill `skills/journal-note/SKILL.md`. Frontmatter:
 - `disable-model-invocation: false`
 
 Passos:
-1. Gate `pgrep -x logseq` (ver Sub-decisão 7). Falha fechada com mensagem clara.
+1. Gate `pgrep -xi logseq` (ver Sub-decisão 7). Falha fechada com mensagem clara.
 2. Recusa fora de git repo (`git rev-parse --show-toplevel` retorna não-zero).
 3. Resolve metadata:
    - **Repo basename**: `basename $(git rev-parse --show-toplevel)`.
@@ -153,7 +153,7 @@ Mecânica: hook recebe stdin JSON com `session_id`, `transcript_path`, `cwd`, `h
 
 1. Marker `[PRAGMATIC: plan-done]` em `tail -n 50 <transcript_path>` (signal de `/run-plan` do `pragmatic-dev-toolkit` terminou; marker é contract público emitido pelo toolkit ≥ v2.13.0 commit `b8989c2`).
 2. `<cwd>/.claude/local/` exists (signal de uso do toolkit no projeto).
-3. `~/Notes/logseq/` exists AND `pgrep -x logseq` retorna não-zero (desktop fechado — pode escrever no graph sem race).
+3. `~/Notes/logseq/` exists AND `pgrep -xi logseq` retorna não-zero (desktop fechado — pode escrever no graph sem race).
 
 Todos os 3 → print mensagem soft em stderr: `💡 Considere /journal-close pra sintetizar a sessão no journal de hoje.` Qualquer gate falha → exit 0 silente.
 
@@ -182,10 +182,11 @@ Binding:
 Probe canonical antes de qualquer write no `~/Notes/logseq/`:
 
 ```bash
-pgrep -x logseq
+pgrep -xi logseq
 ```
 
-- `-x` exige match exato do nome do processo.
+- `-x` exige match exato do nome do processo (não substring).
+- `-i` torna o match case-insensitive — necessário porque o AppImage do Logseq registra o binário como `Logseq` (capital L), não `logseq`. Sem `-i`, gate retorna falso-negativo (não detecta desktop aberto) e quebra failure-closed.
 - Retorna pid(s) se existe; retorna não-zero se ausente.
 - Truthy (desktop aberto) → skill recusa com `Logseq desktop aberto — feche antes de executar /<skill>`.
 
@@ -194,6 +195,10 @@ Aplicado a `/journal-note`, `/journal-close`, `/init-logseq-project`, `/weekly-r
 Substituir por `pidof`, `ps -A | grep`, ou outras variantes **não aceito**. Razão: portability declarada (Linux/macOS; `pgrep` está em coreutils baseline).
 
 **Race window** entre probe e write: milissegundos de ordem (probe → write em mesmo Bash subprocess; não medido empiricamente). Fix-forward via undo do Logseq se materializar.
+
+#### Adendo (2026-05-28) — case-insensitive correction
+
+v0.1.0/0.1.1 declararam canonical `pgrep -x logseq` (case-sensitive). Validação manual da Onda 4 do meta-system (Sessão 6) detectou que o processo real do AppImage Logseq aparece como `Logseq` em `pgrep` — gate retornava falso-negativo com desktop aberto, quebrando a invariante failure-closed que toda a Camada 3 depende. Bug afetava 4 skills + hook (5 arquivos). Fix em v0.1.2: `-x` → `-xi`. Sem ADR novo: refinamento mecânico, sem mudança de critério (probe canonical permanece `pgrep`; portability ainda baseline; aplicação ainda nas 4 skills).
 
 ### Sub-decisão 8 — AskUserQuestion cardinality + frontmatter roles
 
@@ -282,7 +287,7 @@ Skills com `--pkm <type>` flag e backend per-PKM.
 2. **Stop event API muda** (Claude Code release breaks compat): refazer probe.
 3. **`/weekly-review` truncate ou janela 7d ficam restritivos**: ≥2 invocações truncam com >30 itens em 4 semanas → parametrizar via flags.
 4. **AskUserQuestion cardinality 4 fica gargalo**: ≥3 chamadas seriadas em ≥2 invocações → negociar com toolkit core.
-5. **Probe `pgrep -x logseq` falha em ambiente do operador**: adicionar fallback `ps -A | grep -c logseq`.
+5. **Probe `pgrep -xi logseq` falha em ambiente do operador**: adicionar fallback `ps -A | grep -c logseq`. (Atualizado v0.1.2: gatilho original disparou parcialmente — case-sensitive `-x` quebrou em AppImage `Logseq` capital-L; resolvido via `-xi`. Reabre se `pgrep -xi` falhar por outro motivo.)
 6. **`/init-logseq-project` idempotência quebra** (operador reporta perda de dado em ≥1 incidente): revisar critério "prop mecânica".
 7. **Plan slug detection em `/journal-close` falha consistentemente**: probe (i)+(ii) retorna None em ≥3 invocações → refatorar `/run-plan` do toolkit pra expor variável env (adendo aqui).
 8. **Hook stale marker materializa**: ≥2 reports de sugestão soft fora de contexto → implementar refinamento `~/.claude/.hook-last-marker-seen.json`.

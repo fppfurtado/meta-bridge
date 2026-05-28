@@ -24,7 +24,7 @@ Sem argumentos. Skill opera no cwd corrente. Manual one-shot per repo — operad
 
 `git rev-parse --show-toplevel` retorna não-zero → recusa com `/init-logseq-project exige git repo (skill deriva basename + path)`. Exit clean.
 
-`pgrep -x logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /init-logseq-project`. Exit clean.
+`pgrep -xi logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /init-logseq-project`. Exit clean.
 
 ### 2. Resolve metadata mecânica
 
