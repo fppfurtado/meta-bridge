@@ -1,14 +1,14 @@
 ---
 name: weekly-review
-description: Wizard GTD weekly review consumindo headings de daily-journal cross-journals
+description: Wizard GTD weekly review consumindo task markers cross-journals (TODO/DOING/WAITING top-level)
 disable-model-invocation: false
 ---
 
 # weekly-review
 
-Wizard GTD que itera Inbox/Doing/Waiting blocks de journals recentes, prompto operador a classificar cada item (Manter / Próximo passo / Arquivar / Adiar), aplica mudanças no graph, e escreve bloco semanal no journal de hoje seguindo schema `~/Notes/logseq/pages/weekly-review.md`.
+Wizard GTD que itera tasks `TODO`/`DOING`/`WAITING` em buckets `- #<domínio>` de journals recentes, prompto operador a classificar cada item (Manter / Próximo passo / Arquivar / Adiar), aplica mudanças no graph, e escreve bloco semanal no journal de hoje (composição in-skill — sem template).
 
-Mecânica concreta em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 5.
+Mecânica concreta em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 5 (+ Adendo v0.2.0). Consome [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-006-logseq-pkm-cross-domain-via-gtd-e-hashtag-buckets.md) + [ADR-002 do logseq-notes](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md).
 
 Skill **não consome papéis canonical do toolkit** (Resolution protocol per ADR-003 do `pragmatic-dev-toolkit`, aplicado vazio). Cutucada de descoberta **não aplica**.
 
@@ -18,89 +18,116 @@ Sem argumentos. Skill opera sobre `~/Notes/logseq/journals/` cross-files.
 
 ## Passos
 
-### 1. Gates (cheap-first)
-
-`git rev-parse --show-toplevel` retorna não-zero → recusa com `/weekly-review exige git repo (cwd default é repo do operador; nenhum side-effect crítico mas mantém pattern)`. Exit clean.
+### 1. Gate Logseq desktop
 
 `pgrep -xi logseq` → truthy: recusa com `Logseq desktop aberto — feche antes de executar /weekly-review (skill escreve direto no filesystem do graph)`. Exit clean.
 
-### 2. Coleta blocks via parsing de headings cross-journals
+(Gate de git repo **removido** vs v0.1.x — `/weekly-review` opera sobre journals do graph, não deriva nada do cwd.)
+
+### 2. Coleta tasks via grep cross-journal por markers nativos
 
 Resolve metadata:
 
 - **Journals dir**: `~/Notes/logseq/journals/`. Ausente → recusa com `Logseq journals dir ausente em ~/Notes/logseq/journals/ — graph não configurado`. Exit.
-- **Janela temporal**: últimos 7 dias **excluindo journal de hoje** (range `[hoje-7d, hoje-1d]`). Razão: bloco semanal escrito no journal de hoje pode duplicar com `## Inbox` de hoje se incluído. Lista: `find ~/Notes/logseq/journals -name '*.md' -newermt '7 days ago' ! -newermt 'today'` (fixo nesta versão per ADR-001 Sub-decisão 5; reabrir via Gatilho 3).
-- **Template path**: `~/Notes/logseq/pages/weekly-review.md`. Ausente → recusa com `Template weekly-review.md ausente em ~/Notes/logseq/pages/ — feature requer Onda 4 do meta-sistema (Bloco 1 commit 364465e no logseq-notes)`. Exit.
+- **Janela temporal**: últimos 7 dias **excluindo journal de hoje** (range `[hoje-7d, hoje-1d]`). Razão: bloco semanal escrito no journal de hoje pode duplicar com tasks de hoje se incluído. Lista: `find ~/Notes/logseq/journals -name '*.md' -newermt '7 days ago' ! -newermt 'today'` (fixo nesta versão per ADR-001 Sub-decisão 5; reabrir via Gatilho 3).
 
-Para cada journal file na janela, parse 3 listas:
+**Coleta via regex strict** (per F1 do /triage do plano `onda-4-5-journal-retrofit-gtd`): tasks válidas são **filhas diretas de bucket `- #<domínio>`** — 1 nível de indentação (1 tab). Markers em sub-bullets (≥2 tabs) **não são capturados** — viram prosa contextual per ADR-006 § Decisão § 3 mental model.
 
-- **Inbox**: blocos descendentes de heading `## Inbox` (regex linha estrita `^- ## Inbox` — top-level, zero tab, formato canonical pós-`template-including-parent:: false` do daily-journal). Coleta blocos imediatamente abaixo até próximo heading sibling (`^- ## ` mesma indentação) ou EOF. Filtros (sintaxe Logseq canonical):
-  - (a) bloco-pai (heading) sem property `archived:: true` na linha imediatamente subsequente sub-indented por 1 tab adicional (`^\t\tarchived:: true`).
-  - (b) bloco-filho sem property `archived:: true` análoga (linha do bloco ou linha imediatamente subsequente sub-indented).
-- **Doing / Next Actions**: blocos descendentes de `## Doing` (mesma mecânica).
-- **Waiting**: blocos descendentes de `## Waiting` (mesma mecânica).
+Regex de match: `^\t- (TODO|DOING|WAITING) (.*)$` (1 tab indent + marker + espaço + conteúdo). `DONE` e `CANCELLED` são terminais — não entram no backlog por design (per ADR-002 Sub-decisão 4).
 
-**NÃO** filtrar por `status:: active` ou `status:: ` qualquer — essa property é lifecycle de Project Page per ADR-004 invariante; colapsar pegaria 18+ Project Pages como falsos Next Actions.
+Para cada match enriched, captura:
+- **Marker**: `TODO` / `DOING` / `WAITING`
+- **Conteúdo**: texto após o marker
+- **Bucket pai** (`- #<domínio>` ancestor): tree-walk pra trás na file procurando linha top-level `^- #` mais próxima. Fallback se não houver bucket-pai detectável → `#<orfão>` (raro — captura de pre-retrofit ou edição manual quebrada).
+- **Sub-bullets do task** (≥2 tabs imediatamente abaixo, até próximo task ou bucket): coletados como **contexto não-parsed** (prosa pra humano).
+- **Source**: file path + line number do match.
 
-Cada item coletado armazena: source file path, line number, bloco content (texto após `- `).
+**Truncate**: max 20 itens por marker (60 total potencial). Excesso → warning `<marker> tem <N> tasks; truncado em 20. Marker precisa atenção dedicada — invoque /weekly-review novamente após classificar primeiros 20.`
 
-**Truncate**: max 20 itens por categoria (60 total potencial). Excesso → warning `<categoria> tem <N> blocos; truncado em 20. Categoria precisa atenção dedicada — invoque /weekly-review novamente após classificar primeiros 20.`
-
-**Ambas listas vazias** (Inbox + Doing + Waiting = 0) → recusa silenciosa com mensagem `Sem blocos pra review nos últimos 7 dias de journals. Nada a fazer.`. Exit clean.
+**Listas vazias** (TODO + DOING + WAITING = 0) → recusa silenciosa com mensagem `Sem tasks abertas pra review nos últimos 7 dias de journals. Nada a fazer.`. Exit clean.
 
 ### 3. Wizard iterativo de classificação (decisões acumuladas, edits deferred)
 
 Skill **acumula decisões em memória** durante wizard; edits no graph aplicam **somente após** Step 4 compor o bloco semanal (atomic-ish). Crash/cancel mid-wizard → zero side-effect no graph; operador re-invoca sem state parcial.
 
-Para cada item, batch de 4 perguntas por chamada `AskUserQuestion` (cardinality max per CLAUDE.md do toolkit):
+Para cada item, prosa antes do enum apresenta o contexto:
 
-- Header: `Item N/M` onde N = índice corrente, M = total da categoria.
-- Question: `<categoria>: <bloco content truncado em 80 chars>... — Como classificar?`
+```
+**TODO/DOING/WAITING** em [[<bucket-pai>]] (de <YYYY-MM-DD>):
+  <conteúdo do task>
+  Sub-bullets (contexto):
+    - <sub-bullet 1>
+    - <sub-bullet 2>
+    ...
+```
+
+Em seguida, batch de 4 perguntas por chamada `AskUserQuestion` (cardinality max per CLAUDE.md do toolkit):
+
+- Header: `Task N/M` onde N = índice corrente, M = total geral (não por marker).
+- Question: `Como classificar?`
 - Options:
-  - `Manter aqui` — bloco permanece intocado (decision = `keep`).
+  - `Manter aqui` — task permanece intocada (decision = `keep`).
   - `Próximo passo definido` — Other → operador descreve próximo passo em prosa livre (decision = `next_step`, payload = descrição).
-  - `Arquivar` — bloco recebe `archived:: true` no commit batch (decision = `archive`).
-  - `Adiar próxima semana` — bloco move pra journal de próxima segunda-feira (decision = `defer`).
+  - `Arquivar` — task recebe marker `DONE` ou `CANCELLED` (operador escolhe via sub-prompt; default `DONE` se operador omite). decision = `archive`.
+  - `Adiar próxima semana` — task move pra journal de próxima segunda-feira (decision = `defer`).
 
 Após N % 4 == 0 (cada 4 itens), check progresso via `Continuar? <X/M itens restantes>` enum: `Continuar / Pausar e fechar resumo parcial`. Pausa → pula direto pra Step 4 com decisões coletadas; itens não-vistos recebem decision sentinel `not_reviewed` (aparecem no bloco semanal com sufixo `[não-revisado]`, sem edit no source).
 
-**Cálculo "próxima segunda"** pra decisão `defer`: `$(date -u -d 'next Monday' +%Y_%m_%d)`. Comportamento canonical do GNU date: se hoje é segunda, "next Monday" pula 7 dias (mesmo dia da próxima semana). Aceito — operador adiando segunda intencionalmente quer next-next monday. Bloco move pra journal de destino sob **heading de origem** (Inbox → ## Inbox; Doing → ## Doing; Waiting → ## Waiting). Heading ausente no journal de destino → append no fim do file + warning loud `heading "## <categoria>" não encontrada no journal de destino <path>; bloco appended no fim — verificar daily-journal template ou indentação` (failure-closed paralelo a `/journal-close`).
+**Cálculo "próxima segunda"** pra decisão `defer`: `$(date -u -d 'next Monday' +%Y_%m_%d)`. Comportamento GNU date: `defer` aponta sempre para a próxima ocorrência de segunda-feira; review feito final-de-semana → defer pra próxima segunda (1-2 dias à frente). Em segunda, "next Monday" pula 7 dias (intencional — operador adiando segunda quer next-next monday). Task move pra journal de destino sob **bucket de origem** (`- #<domínio>` mesmo do source). Bucket ausente no journal de destino → find-or-create (mesma mecânica de `/journal-note` Step 4).
 
-### 4. Compor bloco semanal literal seguindo schema
+**Defer em task órfã** (bucket-pai = `#<orfão>` — raro, sintoma de captura quebrada pre-retrofit): sub-prompt extra via `AskUserQuestion` pedindo bucket de destino. Operador digita `#<tag>` livre (sanitization kebab-case lowercase aplicada per ADR-002 Sub-decisão 3). Cancel/Empty → degrade pra `keep` com warning `task órfã sem bucket de destino; defer abortado, mantida como-está`.
 
-Lê template `~/Notes/logseq/pages/weekly-review.md`. Parseia placeholders:
+**Sub-bullets do task original**: preservados no defer (acompanham a task pro journal de destino) e no archive (continuam como prosa abaixo do task com marker terminal). No `next_step`, a descrição do próximo passo é appended como sub-bullet adicional.
 
-- `<inbox-blocks>` → lista resolved pós-classificação: cada item formatado por sufixo conforme decisão:
-  - `keep` → `- <bloco content>` (sem sufixo).
-  - `archive` → `- <bloco content> [arquivado]`.
-  - `next_step` → `- <bloco content> [próximo passo: <descrição>]`.
-  - `defer` → `- <bloco content> [adiado pra <data próxima segunda>]`.
-  - `not_reviewed` → `- <bloco content> [não-revisado]` (operador pausou wizard antes de chegar).
-- `<doing-blocks>` → análogo.
-- `<waiting-blocks>` → análogo.
+### 4. Compor bloco semanal in-skill (sem template)
 
-Headings `## Decisões da semana` e `## Próxima semana` ficam como skeleton vazio no template — operador edita depois manualmente no Logseq desktop.
+Sem consumer de template — composição direta seguindo formato:
 
-Date placeholder `<% today %>` do template Logseq → substituir por `$(date -u +%Y-%m-%d)` literal (UTC, alinhado com journal filename pattern).
+```
+- ## Weekly review — <YYYY-MM-DD>
+	- ## TODO classificados
+		- <task 1> [<sufixo decisão>]
+		- <task 2> [<sufixo decisão>]
+		...
+	- ## DOING classificados
+		- <task 1> [<sufixo decisão>]
+		...
+	- ## WAITING classificados
+		- <task 1> [<sufixo decisão>]
+		...
+	- ## Decisões da semana
+	- ## Próxima semana
+```
+
+Sufixos por decisão:
+- `keep` → sem sufixo
+- `archive` → `[arquivado: <marker terminal>]` (DONE ou CANCELLED escolhido no wizard)
+- `next_step` → `[próximo passo: <descrição truncada em 80 chars + "..." se exceder>]` (descrição completa permanece no source — Step 5 append como sub-bullet do task)
+- `defer` → `[adiado pra <YYYY-MM-DD>]`
+- `not_reviewed` → `[não-revisado]`
+
+Headings `## Decisões da semana` e `## Próxima semana` ficam como skeleton vazio — operador edita depois manualmente no Logseq desktop.
+
+Data: `$(date -u +%Y-%m-%d)` literal (UTC, alinhado com journal filename pattern).
 
 ### 5. Aplicar edits batch + Append no journal de hoje
 
 **Atomic-ish batch** (deferred do Step 3): para cada decisão acumulada em memória, aplica edit no source file na ordem coletada:
 
-- `archive` → adiciona linha sub-indented `\t\tarchived:: true` imediatamente após o bloco source.
-- `next_step` → adiciona linha sub-indented `\t\t- <descrição>` como sub-bloco do source.
-- `defer` → remove bloco do source file + adiciona no journal de destino sob heading de origem (cálculo per Step 3; criar journal se ausente via daily-journal template body copy).
+- `archive` → muda marker do task no source de `TODO`/`DOING`/`WAITING` pra terminal escolhido (`DONE` ou `CANCELLED`). Marker change **in-place no journal source** — markers terminais ficam onde a task viveu, sem mover pra journal de hoje (per ADR-002 Sub-decisão 4 do logseq-notes: markers como SSOT in-place). Sub-bullets preservados.
+- `next_step` → adiciona linha sub-indented `\t\t- <descrição>` como sub-bloco do task source.
+- `defer` → move task (linha + sub-bullets nested) do source file pro journal de destino sob bucket de origem (find-or-create bucket no destino; criar journal se ausente via daily-journal template body copy — mesma mecânica de `/journal-note` Step 3 — scaffold mínimo per ADR-002 Sub-decisão 1).
 - `keep` / `not_reviewed` → no-op (source preservado).
 
 Após todos os edits source, **append do bloco semanal** no journal path de hoje (`~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md`):
 
-- Journal existe → append no fim do file (bloco semanal é top-level resultado da review, não tenta heading-aggregator).
-- Journal ausente → criar via leitura do daily-journal template (mesma mecânica do `/journal-note`); append do bloco no fim.
+- Journal existe → append no fim do file (bloco semanal é top-level resultado da review, não tenta find-or-create dentro de bucket).
+- Journal ausente → criar via leitura do daily-journal template (mesma mecânica do `/journal-note` Step 3); append do bloco no fim.
 
 ### 6. Reportar
 
 Resumo final:
-- Total de itens classificados por categoria (Inbox/Doing/Waiting).
+- Total de itens classificados por marker (TODO/DOING/WAITING).
 - Distribuição de classificações (`X mantidos, Y arquivados, Z adiados, W com próximo passo`).
 - Path do journal tocado.
 
@@ -108,12 +135,14 @@ Exit.
 
 ## O que NÃO fazer
 
-- Não filtrar por `status:: active` ou `status::` qualquer — essa property é lifecycle de Project Page per ADR-004; coletar via heading-aggregator é o pattern doutrinário.
-- Não rodar queries Logseq Datalog — desktop fechado por gate; parsing direto via filesystem markdown é canonical.
+- Não filtrar por `status:: active` ou `status::` qualquer — essa property é lifecycle de Project Page per ADR-004 do meta-system; coleta via marker grep é o pattern doutrinário pós-retrofit.
+- Não capturar markers em sub-bullets (≥2 tabs) — regex restrita a 1-tab indent per ADR-006 § Decisão § 3 contract (sub-bullets são prosa não-parsed; ADR-002 Sub-decisão 4 confirma — `/weekly-review` v0.2.0+ olha só markers open top-level).
+- Não capturar `DONE` ou `CANCELLED` no backlog — markers terminais; audit retrospectivo via leitura direta do journal ou query Logseq Datalog ad-hoc.
+- Não rodar queries Logseq Datalog — desktop fechado por gate; grep direto via filesystem markdown é canonical.
 - Não persistir state entre invocações — skill é stateless; cada invocação re-parse a janela.
-- Não substituir block-ref `((weekly-review))` — schema-only template per ADR-001 Sub-decisão 2; skill faz literal append.
+- Não consumir `pages/weekly-review.md` — template descontinuado pós-retrofit (composição in-skill paralelo a `/journal-close` v0.2.0).
 - Não fazer commit em logseq-notes — repo de notes tem ciclo próprio.
 - Não parametrizar truncate (20) ou janela (7d) hardcoded — flags `--max-items <N>` / `--window-days <N>` reabrem via Gatilho 3 do ADR-001 se sinal real surgir.
 - Não tenta escrever em pages/<categoria>.md aggregator-style — review é per-journal aggregation, não materializa view permanente fora do journal de hoje.
-- Não tratar headings rebaixados/promovidos manualmente pelo operador no Logseq desktop (`\t\t- ## Inbox` em vez de `\t- ## Inbox`) — regex strict assume indentação canonical de daily-journal template. Recovery é manual via UI. Se journal canonical não tem **nenhum** dos 3 headings em formato estrito, skill reporta warning como sinal de drift.
 - Não incluir journal de hoje na janela de coleta — bloco semanal é appended em journal de hoje; incluí-lo duplicaria items vivos com snapshot.
+- Não escrever se Logseq desktop aberto (pgrep gate). Failure-closed.

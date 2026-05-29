@@ -213,6 +213,26 @@ Passos:
 5. Aplicar edits batch + compor bloco semanal **literal** seguindo schema `weekly-review.md` (substituição de `<inbox-blocks>`/`<doing-blocks>`/`<waiting-blocks>` com listas formatadas por sufixo de decisão). Append no journal de hoje. Date placeholder `<% today %>` → `$(date -u +%Y-%m-%d)` (UTC alinhado).
 6. Reporta totais + distribuição de classificações.
 
+#### Adendo v0.2.0 (2026-05-28) — retrofit pra parsing de task markers + composição in-skill
+
+Materializa [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-006-logseq-pkm-cross-domain-via-gtd-e-hashtag-buckets.md) + [ADR-002 do logseq-notes](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md). Refinamento mecânico (decisão central intacta — wizard GTD que classifica tasks de janela 7 dias; muda **como** as tasks são identificadas).
+
+Refinamentos do diff v0.1.x → v0.2.0:
+
+- **Coleta via grep de markers nativos**: substitui parsing de headings `## Inbox`/`## Doing`/`## Waiting` (que saíram do daily-journal template per ADR-002 Sub-decisão 1) por grep de markers Logseq nativos `TODO`/`DOING`/`WAITING` em journals. ADR-002 Sub-decisão 4 estabelece markers nativos como SSOT de estado GTD; Sub-decisão 5 aqui adapta consumer.
+- **Regex restrita a top-level** (1-tab indent, filhas diretas de bucket `- #<domínio>`): `^\t- (TODO|DOING|WAITING) (.*)$` per F1 do /triage do plano `onda-4-5-journal-retrofit-gtd`. Markers em sub-bullets (≥2 tabs) ficam como prosa contextual per ADR-006 § Decisão § 3 mental model (sub-bullets = prosa não-parsed).
+- **Markers `DONE` e `CANCELLED` não capturados**: terminais por design (per ADR-002 Sub-decisão 4) — não entram no backlog do wizard. Audit retrospectivo via leitura direta do journal.
+- **Sub-bullets do task apresentados como contexto não-parsed** (per ADR-006 § Decisão § 3 contract): wizard mostra sub-bullets pro operador classificar mas NÃO infere taxonomia por prefixo. Apresentação como prosa em prelúdio à AskUserQuestion.
+- **Bucket de origem preservado em decisão `defer`**: task move pra journal de destino sob `- #<domínio>` mesmo do source. Find-or-create do bucket no destino paralelo a `/journal-note` Step 4.
+- **Archive via mudança de marker (não property)**: decisão `archive` muda marker do task no source de `TODO`/`DOING`/`WAITING` pra terminal escolhido (`DONE` ou `CANCELLED`). Substitui adicção de property `archived:: true` da v0.1.x. Razão: per ADR-002 Sub-decisão 4, markers são SSOT; property `archived::` é pra page-level (ADR-001 deste logseq-notes Sub-decisão 7), não block-level.
+- **Composição in-skill**: drop consumption de `pages/weekly-review.md` template. Compose direto no Step 4 (paralelo a `/journal-close` v0.2.0). Template `pages/weekly-review.md` deixa de ser consumer da skill — destino do arquivo no graph fica a critério do operador do logseq-notes (fora do escopo deste ADR).
+- **Wizard pacing pós-retrofit**: iteração global cross-marker (M = total geral, não per-marker), batch de 4 perguntas por chamada `AskUserQuestion`. Truncate max 20 por marker (60 total potencial) → até 15 chamadas seriadas no pior caso. Substitui o cálculo "5 chamadas × batch de 4" da v0.1.x (que era per-categoria).
+- **Drop gate git repo**: v0.1.x exigia git repo no cwd (sem razão funcional — skill opera sobre `~/Notes/logseq/journals/`). v0.2.0 dropa o gate; pgrep continua canonical.
+
+Pré-condições v0.2.0 herdadas intactas: `pgrep -xi logseq` gate (Sub-decisão 7 + Adendo v0.1.2), failure-closed; truncate max 20 por marker; janela 7 dias excluindo hoje.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (wizard GTD que classifica tasks de janela temporal); sem categoria nova; sem restrição externa nova; caráter explicativo + refinamento.
+
 ### Sub-decisão 6 — Hook `suggest_journal_close` (Stop event)
 
 Hook `hooks/suggest_journal_close.py` + binding `Stop` event em `hooks/hooks.json`.
