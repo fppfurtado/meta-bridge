@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0 — 2026-05-28
+
+### Changed
+
+**Schema-breaking change pro daily-journal — formato hashtag-bucket + GTD nativo (Onda 4.5 do meta-system).** Retrofit das 3 skills de capture (`/journal-note`, `/journal-close`, `/weekly-review`) consumindo [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-006-logseq-pkm-cross-domain-via-gtd-e-hashtag-buckets.md) + [ADR-002 do logseq-notes](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) como constraints. Schema novo: top-level no journal é `- #<domínio>` (hashtag-bucket); estados GTD via task markers nativos (`TODO`/`DOING`/`WAITING`/`DONE`/`CANCELLED`) in-block per ADR-002 Sub-decisão 4; sub-bullets free-form per ADR-006 § Decisão § 3 (skills consomem só markers + cross-refs mecânicos `commit:`/`plan:`/`[[<page>]]`).
+
+**Migration policy: hard cutover from release date forward.** Journals pré-existentes (anteriores a 2026-05-28) ficam intactos no formato Onda 3+4 (headings `## Inbox`/`## Doing`/`## Waiting`/`## Notes` + blocos `## Session close:`). Novo formato aplica a partir de journals com data ≥ 2026-05-28. Sem migration script — convivência permanente dos 2 formats no graph. `/weekly-review` v0.2.0 olha últimos 7 dias — em 1 semana só formato novo na janela ativa.
+
+- **`/journal-note` v0.2.0**: find-or-create bucket `- #<domínio>` top-level + append child task. Domínio derivado por probe ordenado (cwd em git repo → basename; cwd fora → AskUserQuestion enum `#thought`/`#draft`/`#idea` + Other com sanitization kebab-case lowercase). Input com marker prefix uppercase (`TODO `/`DOING `/...`) preserva como marker Logseq nativo. Sub-bullets mecânicos extraídos limitados a `commit:<hash>` e `plan:<slug>`. Drop gate git repo (fora-de-git agora válido). Drop timestamp UTC do bloco (duplicava filename do journal). ADR-001 Sub-decisão 1 ganha § Adendo v0.2.0.
+- **`/journal-close` v0.2.0**: sintetiza session context em tasks `- DONE <subject>` agrupadas por bucket `- #<repo>` com sub-bullets mecânicos. Find-or-create cada bucket idempotente cross-skill com `/journal-note` prévios + dedup intra-skill por `commit:<hash>` (Stop hook fires 2× não duplica writes). Coleta multi-repo via probe explícito de cwds tocados na sessão + `git log` em cada (fallback degraded single-repo com warning). Sessão sem commits → recusa silenciosa sugerindo `/journal-note`. Synthesis-then-confirm UX preservado. Drop consumption de `pages/session-close.md` (archived no logseq-notes per ADR-002 Sub-decisão 2). ADR-001 Sub-decisão 3 ganha § Adendo v0.2.0.
+- **`/weekly-review` v0.2.0**: coleta via regex strict cross-journal `^\t- (TODO|DOING|WAITING) ` (1-tab indent — filhas diretas de bucket; markers em sub-bullets ≥2 tabs ficam como prosa contextual per F1 cutucada do /triage). `DONE`/`CANCELLED` não capturados (terminais por design). Archive via mudança de marker in-place (não property `archived::`) per ADR-002 Sub-decisão 4 (markers como SSOT). Composição in-skill (drop template `pages/weekly-review.md` consumption — paralelo a `/journal-close` v0.2.0). Drop gate git repo. Defer preserva bucket de origem no destino + sub-prompt pra escolher bucket quando task órfã. ADR-001 Sub-decisão 5 ganha § Adendo v0.2.0.
+- **Stop hook `suggest_journal_close.py`**: lógica intacta — 3 gates (marker `[PRAGMATIC: plan-done]` no transcript + `.claude/local/` exists + Logseq desktop fechado). Sugestão "considere /journal-close" continua válida; mudança de output da skill é transparente pro hook. Validação no Bloco 3 do plano `onda-4-5-journal-retrofit-gtd` confirma compatibilidade (sem mudança de código). ADR-001 Adendo v0.2.0 da Sub-decisão 3 registra.
+
+**Cross-repo coordenado**: este release acompanha [commit `9935ae1`](https://github.com/fppfurtado/logseq-notes/commit/9935ae1) no logseq-notes (ADR-002 + page daily-journal substituída por scaffold mínimo + page session-close archived) + [commit `7dc5055`](https://github.com/fppfurtado/logseq-notes/commit/7dc5055) (page weekly-review archived) + commits no meta-system (plano + ADR-006 + ARCHITECTURE).
+
+**Plano de execução**: [`docs/plans/onda-4-5-journal-retrofit-gtd.md` do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/plans/onda-4-5-journal-retrofit-gtd.md).
+
 ## 0.1.5 — 2026-05-28
 
 ### Fixed
