@@ -119,6 +119,26 @@ Falha clara se `session-close.md` ausente (`Template session-close.md ausente em
 
 Adendo per [ADR-034](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério (todos 4 satisfeitos: decisão central intacta — /journal-close ainda sintetiza sessão em bloco no journal; sem nova categoria; sem restrição externa; caráter explicativo — refinamento de mecânica). Não-trivializa Topic (segue candidate-based via Other override).
 
+#### Adendo v0.2.0 (2026-05-28) — retrofit pra tasks DONE em hashtag-buckets
+
+Materializa [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-006-logseq-pkm-cross-domain-via-gtd-e-hashtag-buckets.md) + [ADR-002 do logseq-notes](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md). Refinamento mecânico (decisão central intacta — skill ainda sintetiza sessão CC no journal de hoje; muda o **formato** do bloco produzido).
+
+Refinamentos do diff v0.1.x → v0.2.0:
+
+- **`session-close.md` template removido como consumer**: ADR-002 Sub-decisão 2 archive o template. `/journal-close` v0.2.0 compõe in-skill — não há mais Step de "lê template, parseia placeholders, substitui". Falha do "Template ausente" eliminada do Step 2.
+- **Format do bloco synthesized**: muda de schema (`## Session close: <topic>` com bullets labels `**Repo afetado:**` / `**Plano:**` / `**Mudanças:**` / `**Decisões tomadas:**` / `**Follow-ups:**`) pra **tasks DONE agrupadas por bucket `- #<repo>`** com sub-bullets mecânicos (`- commit: <hash>`, `- plan: <slug>`, `- [[<page>]]`). Bucket per repo coberto pela sessão; multi-repo emerge naturalmente quando commits cruzaram repos.
+- **Synthesis-then-confirm preservado** (Adendo de 2026-05-28 acima): agente extrai rascunho de tasks DONE; AskUserQuestion única com 3 opções (Confirma / Edita via Other / Sem commits úteis — não escrever). Topic e Decisões/Follow-ups labels do v0.1.x desaparecem porque schema novo não tem esses campos.
+- **Find-or-create cada bucket** (Step 5 da v0.2.0): substitui o append na seção `## Notes` do v0.1.x (regex `^- ## Notes`). Pós-retrofit, template `daily-journal` é scaffold mínimo (ADR-002 Sub-decisão 1) — sem heading `## Notes`. Find-or-create de `- #<repo>` é idempotente cross-skill com `/journal-note` prévios da mesma sessão (contract crítico per ADR-006 § Decisão § 1).
+- **Sub-bullets mecânicos**: limitados a `commit:`/`plan:`/`[[<page>]]` per ADR-006 § Decisão § 3 contract (skills consomem só markers + cross-refs mecânicos; sub-bullets ficam não-parsed). Convention fechada herda do Adendo v0.2.0 de Sub-decisão 1.
+- **Coleta multi-repo via probe explícito**: Step 2 da v0.2.0 enumera cwds tocados na sessão via inspect do conversation history (agente lista paths visitados), depois roda `git log --since=... --no-merges` em cada cwd descoberto. Mecânica determinística com fallback (degrada pra single-repo se conversation history não expõe cwds, reportando warning). v0.1.x assumia single-repo via cwd; v0.2.0 reconhece que sessões reais cruzam repos (Onda 4.5 atual é exemplo — Blocos 1-6 tocam 3 repos).
+- **Idempotência intra-skill via dedup `commit:<hash>`**: Step 5 ganha probe pré-write em cada task DONE candidata; se `commit:` sub-bullet com mesmo hash já existe sob o bucket, skip. Cobre cenário Stop hook fires múltiplas vezes (Sub-decisão 6 Limitações reconhecida) — operator aceitar `/journal-close` 2× é seguro.
+
+Pré-condições v0.2.0 herdadas intactas: `pgrep -xi logseq` gate (Sub-decisão 7 + Adendo v0.1.2), failure-closed; gate git repo preservado (skill deriva basename do cwd como repo principal).
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (skill `/journal-close` sintetiza sessão no journal de hoje); sem categoria nova; sem restrição externa nova; caráter explicativo + refinamento.
+
+**Stop hook `suggest_journal_close.py` permanece intacto** — lógica do hook (3 gates: marker `[PRAGMATIC: plan-done]` no transcript + `.claude/local/` exists + Logseq fechado) é agnóstica ao formato do bloco que `/journal-close` produz. Sugestão "considere /journal-close" continua válida; mudança de output da skill é transparente pro hook. Validação no Bloco 3 do plano `onda-4-5-journal-retrofit-gtd` confirma compatibilidade (sem mudança de código).
+
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
 Skill `skills/init-logseq-project/SKILL.md`. Frontmatter:
