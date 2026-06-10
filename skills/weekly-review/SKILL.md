@@ -73,7 +73,7 @@ Em seguida, batch de 4 perguntas por chamada `AskUserQuestion` (cardinality max 
 
 Após N % 4 == 0 (cada 4 itens), check progresso via `Continuar? <X/M itens restantes>` enum: `Continuar / Pausar e fechar resumo parcial`. Pausa → pula direto pra Step 4 com decisões coletadas; itens não-vistos recebem decision sentinel `not_reviewed` (aparecem no bloco semanal com sufixo `[não-revisado]`, sem edit no source).
 
-**Cálculo "próxima segunda"** pra decisão `defer`: `$(date -u -d 'next Monday' +%Y_%m_%d)`. Comportamento GNU date: `defer` aponta sempre para a próxima ocorrência de segunda-feira; review feito final-de-semana → defer pra próxima segunda (1-2 dias à frente). Em segunda, "next Monday" pula 7 dias (intencional — operador adiando segunda quer next-next monday). Task move pra journal de destino sob **bucket de origem** (`- #<domínio>` mesmo do source). Bucket ausente no journal de destino → find-or-create (mesma mecânica de `/journal-note` Step 4).
+**Cálculo "próxima segunda"** pra decisão `defer`: `$(date -d 'next Monday' +%Y_%m_%d)`. Comportamento GNU date: `defer` aponta sempre para a próxima ocorrência de segunda-feira; review feito final-de-semana → defer pra próxima segunda (1-2 dias à frente). Em segunda, "next Monday" pula 7 dias (intencional — operador adiando segunda quer next-next monday). Task move pra journal de destino sob **bucket de origem** (`- #<domínio>` mesmo do source). Bucket ausente no journal de destino → find-or-create (mesma mecânica de `/journal-note` Step 4).
 
 **Defer em task órfã** (bucket-pai = `#<orfão>` — raro, sintoma de captura quebrada pre-retrofit): sub-prompt extra via `AskUserQuestion` pedindo bucket de destino. Operador digita `#<tag>` livre (sanitization kebab-case lowercase aplicada per ADR-002 Sub-decisão 3). Cancel/Empty → degrade pra `keep` com warning `task órfã sem bucket de destino; defer abortado, mantida como-está`.
 
@@ -108,7 +108,7 @@ Sufixos por decisão:
 
 Headings `## Decisões da semana` e `## Próxima semana` ficam como skeleton vazio — operador edita depois manualmente no Logseq desktop.
 
-Data: `$(date -u +%Y-%m-%d)` literal (UTC, alinhado com journal filename pattern).
+Data: `$(date +%Y-%m-%d)` literal (local TZ, alinhado com journal filename pattern).
 
 ### 5. Aplicar edits batch + Append no journal de hoje
 
@@ -119,7 +119,7 @@ Data: `$(date -u +%Y-%m-%d)` literal (UTC, alinhado com journal filename pattern
 - `defer` → move task (linha + sub-bullets nested) do source file pro journal de destino sob bucket de origem (find-or-create bucket no destino; criar journal se ausente via daily-journal template body copy — mesma mecânica de `/journal-note` Step 3 — scaffold mínimo per ADR-002 Sub-decisão 1).
 - `keep` / `not_reviewed` → no-op (source preservado).
 
-Após todos os edits source, **append do bloco semanal** no journal path de hoje (`~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md`):
+Após todos os edits source, **append do bloco semanal** no journal path de hoje (`~/Notes/logseq/journals/$(date +%Y_%m_%d).md`):
 
 - Journal existe → append no fim do file (bloco semanal é top-level resultado da review, não tenta find-or-create dentro de bucket).
 - Journal ausente → criar via leitura do daily-journal template (mesma mecânica do `/journal-note` Step 3); append do bloco no fim.

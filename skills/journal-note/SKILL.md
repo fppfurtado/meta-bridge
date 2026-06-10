@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 # journal-note
 
-Find-or-create bucket `- #<domínio>` top-level no journal `~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md` + append child task com marker GTD nativo opcional. Materializa capture cross-domain com baixo atrito no graph per [ADR-005 cross-cutting do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-005-bridge-via-pragmatic-toolkit.md) consumindo [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-006-logseq-pkm-cross-domain-via-gtd-e-hashtag-buckets.md) + [ADR-002 do logseq-notes](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md).
+Find-or-create bucket `- #<domínio>` top-level no journal `~/Notes/logseq/journals/$(date +%Y_%m_%d).md` + append child task com marker GTD nativo opcional. Materializa capture cross-domain com baixo atrito no graph per [ADR-005 cross-cutting do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-005-bridge-via-pragmatic-toolkit.md) consumindo [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-006-logseq-pkm-cross-domain-via-gtd-e-hashtag-buckets.md) + [ADR-002 do logseq-notes](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md).
 
 Mecânica concreta em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 1 (+ Adendo v0.2.0).
 
@@ -51,7 +51,7 @@ Convention de naming definida em [ADR-002 do logseq-notes Sub-decisão 3](https:
 
 ### 3. Resolver journal path + bootstrap se ausente
 
-- **Journal path**: `~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md` (Logseq canonical filename com separator `_`, UTC date).
+- **Journal path**: `~/Notes/logseq/journals/$(date +%Y_%m_%d).md` (Logseq canonical filename com separator `_`, local TZ).
 - Journal path **não existe** → ler `~/Notes/logseq/pages/daily-journal.md` como template body; copiar conteúdo (após linha de `template-including-parent:: false`) pro journal path. Template ausente (logseq-notes não setup) → criar arquivo vazio.
 
 Template pós-Onda 4.5 é scaffold mínimo (1 bullet vazio) per ADR-002 Sub-decisão 1; não há headings GTD fixos.

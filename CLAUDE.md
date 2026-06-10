@@ -22,7 +22,7 @@ No build, no tests, no runtime in the plugin itself. The "code" is markdown fron
 These paths are hardcoded in skills. Changing them requires patching the skills, not config:
 
 - `~/Notes/logseq/` — Logseq graph root.
-- `~/Notes/logseq/journals/YYYY_MM_DD.md` — daily journal canonical filename (Logseq's `_` separator + UTC date).
+- `~/Notes/logseq/journals/YYYY_MM_DD.md` — daily journal canonical filename (Logseq's `_` separator + local TZ date — ver ADR-001 § Sub-decisão 1 Adendo v0.2.1).
 - `~/Notes/logseq/pages/<basename>.md` — Project Page canonical naming.
 - `~/Notes/logseq/pages/{session-close,weekly-review,Project Template,daily-journal}.md` — schema templates the skills consume.
 - `~/.mrconfig` — `mr` config for cluster lookup in `/init-logseq-project`.

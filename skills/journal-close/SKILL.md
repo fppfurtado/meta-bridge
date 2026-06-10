@@ -36,7 +36,7 @@ Sem argumentos. Skill coleta context da sessão CC corrente via probe do git + f
   2. **`git log` em cada cwd descoberto**: para cada path da lista, `cd <path> && git log --since="<start-of-session>" --oneline --no-merges`. Falha de `git log` (path não é repo, vazio) → skip silente.
 - Cada commit captura: subject, hash short (7 chars), repo basename (derivado do `basename` do path). Resultado: lista [(repo, hash, subject), ...] cobrindo todos os repos tocados pela sessão.
 - **Fallback se conversation history não expõe cwds visitados**: degradar pra single-repo (cwd corrente apenas), reportar warning `coleta multi-repo degraded — só commits do cwd corrente capturados` no Step 6.
-- **Journal path**: `~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md`.
+- **Journal path**: `~/Notes/logseq/journals/$(date +%Y_%m_%d).md`.
 
 ### 3. Sintetizar rascunho de tasks DONE agrupadas por bucket
 

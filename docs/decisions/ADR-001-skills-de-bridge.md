@@ -42,7 +42,7 @@ Passos:
 2. Recusa fora de git repo (`git rev-parse --show-toplevel` retorna não-zero).
 3. Resolve metadata:
    - **Repo basename**: `basename $(git rev-parse --show-toplevel)`.
-   - **Journal path**: `~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md` (Logseq canonical com separator `_`, UTC date).
+   - **Journal path**: `~/Notes/logseq/journals/$(date +%Y_%m_%d).md` (Logseq canonical com separator `_`, **local TZ** — ver Adendo v0.2.1 abaixo).
    - **Timestamp UTC**: `date -u +%Y-%m-%dT%H:%M:%SZ`.
 4. Conteúdo final vazio → recusa silenciosa, exit clean.
 5. Append do bloco no formato:
@@ -73,6 +73,28 @@ Refinamentos do diff v0.1.x → v0.2.0 (lista descritiva, não mapeamento 1:1 co
 Pré-condições v0.2.0 herdadas intactas: `pgrep -xi logseq` gate (Sub-decisão 7 + Adendo v0.1.2), failure-closed; conteúdo vazio → recusa silenciosa.
 
 Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (skill `/journal-note` escreve no journal de hoje); sem categoria nova (refina mecanismo de write); sem restrição externa nova; caráter explicativo + refinamento.
+
+#### Adendo v0.2.1 (2026-06-10) — Migration UTC → local TZ pra convergência cross-plugin
+
+Filename do journal (`$(date -u +%Y_%m_%d)`) migrado pra **local TZ** (`$(date +%Y_%m_%d)`). Refina mecanismo de write — decisão central intacta (skill ainda escreve no journal de hoje).
+
+**Origem:** `tjpa-tools` v0.2.0 (2026-06-02) bootstrapped `tjpa_tools/report/logseq_write.py` com `date.today()` (local TZ) — escolha deliberada do operador via `/run-plan tjpa-report-logseq-page` per intuição diária BRT. [`tjpa-tools ADR-002`](https://github.com/fppfurtado/tjpa-tools/blob/main/docs/decisions/ADR-002-output-page-logseq.md) § Contexto antecipou explicitamente o gatilho: *"gatilho de Adendo a ADR-001 do `meta-bridge` se padrão de divergência se consolidar (captura em backlog do meta-system)"*. Gatilho disparou em 2026-06-10 (sessão CC `tjpa-tools-backlog`): empiricamente verificado que os 2 plugins produzem filenames diferentes na janela 21h-23h59 BRT (bullets caem em journals distintos).
+
+**Decisão (cross-plugin convergência):** **local TZ vence**. 4 razões objetivas (per plano canonical [`journals-tz-cross-plugin-convergencia.md`](https://github.com/fppfurtado/meta-system/blob/main/docs/plans/journals-tz-cross-plugin-convergencia.md) deste repo `meta-system`):
+1. **Intuição diária do operador BRT** — journal de 21h é "hoje" no modelo mental do operador.
+2. **Decisão mais recente prevalece** — escolha tjpa-tools (2026-06-02) é mais recente que escolha original meta-bridge UTC (v0.1.x).
+3. **Cross-máquina é teórico hoje** — operador single-machine; ganho UTC "estável cross-máquina" sem custo concreto.
+4. **Material match com convention Logseq desktop** — Logseq desktop usa local TZ pra `today` template; alinhamento UX.
+
+**Mecânica aplicada:** v0.2.1 troca `date -u +<format>` → `date +<format>` em 6 ocorrências nas 3 SKILL.md (`journal-note/SKILL.md:9+54`, `journal-close/SKILL.md:39`, `weekly-review/SKILL.md:76+111+122`). Linhas mecânicas do ADR-001 (45, 109, 212-213) atualizadas pra refletir estado corrente. Linhas 46/50/70 NÃO tocadas — referem-se a "Timestamp UTC removido do bloco" em v0.2.0 (narrativa histórica sobre Timestamp do bloco, não sobre filename do journal).
+
+**Cross-refs:**
+- [`meta-system` ADR-004](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-004-logseq-cognitive-hub.md) — Adendo cristalizando "filename de journal usa local TZ" como invariante cross-plugin canonical da Camada 4.
+- [`tjpa-tools` ADR-002](https://github.com/fppfurtado/tjpa-tools/blob/main/docs/decisions/ADR-002-output-page-logseq.md) — Adendo recíproco confirmando convergência cross-plugin.
+
+**Convention "operador é single-machine BRT" assumida.** Multi-máquina cross-fuso no futuro → gatilho de revisão emerge (conflitos visíveis em `~/Notes/logseq/journals/` via drive-sync) e nova `/triage` decide.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta; sem categoria nova; sem restrição externa nova; refinamento mecânico justificado por convergência cross-plugin documentada.
 
 ### Sub-decisão 2 — Template insertion: literal append
 
@@ -106,7 +128,7 @@ Passos:
    - **Mudanças (summary)**: `git log --since="2 hours ago" --oneline --no-merges`.
 3. **Sintetizar rascunhos + confirmação** (adendo 2026-05-28 — ver § Adendo abaixo): skill (agente) extrai rascunhos de Topic candidates, Decisões e Follow-ups de session context (commits + conversation). AskUserQuestion única chamada com 3 enums presentando rascunhos pra confirmação: Topic (candidates + Other), Decisões (`Confirma rascunho` / `Edita via Other` / `Sem decisões — limpar rascunho`), Follow-ups (análogo). Rascunho vazio → enum cai pra binary `Confirma "sem"` / `Há — descrever via Other`.
 4. Compõe bloco **literal** seguindo schema de `session-close.md` (parse placeholders + substitui).
-5. Append no `~/Notes/logseq/journals/$(date -u +%Y_%m_%d).md` sob seção `## Notes` (regex strict `^- ## Notes` — top-level, zero tab; ausência → warning loud + append no fim).
+5. Append no `~/Notes/logseq/journals/$(date +%Y_%m_%d).md` sob seção `## Notes` (regex strict `^- ## Notes` — top-level, zero tab; ausência → warning loud + append no fim).
 6. Reporta path tocado + bullets count.
 
 Falha clara se `session-close.md` ausente (`Template session-close.md ausente em ~/Notes/logseq/pages/ — feature requer setup do graph`).
@@ -209,8 +231,8 @@ Passos:
    - **Waiting**: blocos sob `## Waiting`.
    - **NÃO** filtrar por `status:: active` (essa property é lifecycle de Project Page per ADR-004 invariante; colapsar pegaria 18+ Project Pages como falsos Next Actions).
 3. Truncate max 20 itens por categoria (= 5 chamadas AskUserQuestion seriadas com batch de 4). Ambas listas vazias → recusa silenciosa.
-4. Wizard iterativo de classificação. Skill **acumula decisões em memória**; edits no graph aplicam **somente após** Step 5 compor o bloco semanal (atomic-ish — crash mid-wizard = zero side-effect). 4 decisões: `keep`/`next_step` (Other → descrição)/`archive`/`defer` (move pra journal de próxima segunda `date -u -d 'next Monday'`, preservando heading de origem).
-5. Aplicar edits batch + compor bloco semanal **literal** seguindo schema `weekly-review.md` (substituição de `<inbox-blocks>`/`<doing-blocks>`/`<waiting-blocks>` com listas formatadas por sufixo de decisão). Append no journal de hoje. Date placeholder `<% today %>` → `$(date -u +%Y-%m-%d)` (UTC alinhado).
+4. Wizard iterativo de classificação. Skill **acumula decisões em memória**; edits no graph aplicam **somente após** Step 5 compor o bloco semanal (atomic-ish — crash mid-wizard = zero side-effect). 4 decisões: `keep`/`next_step` (Other → descrição)/`archive`/`defer` (move pra journal de próxima segunda `date -d 'next Monday'`, preservando heading de origem).
+5. Aplicar edits batch + compor bloco semanal **literal** seguindo schema `weekly-review.md` (substituição de `<inbox-blocks>`/`<doing-blocks>`/`<waiting-blocks>` com listas formatadas por sufixo de decisão). Append no journal de hoje. Date placeholder `<% today %>` → `$(date +%Y-%m-%d)` (local TZ alinhado).
 6. Reporta totais + distribuição de classificações.
 
 #### Adendo v0.2.0 (2026-05-28) — retrofit pra parsing de task markers + composição in-skill
