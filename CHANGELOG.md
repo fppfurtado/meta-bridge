@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1 — 2026-06-10
+
+### Changed
+
+**Journals em local TZ pra convergência cross-plugin com `tjpa-tools`.** As 3 skills de write no journal (`/journal-note`, `/journal-close`, `/weekly-review`) migram `$(date -u +%Y_%m_%d)` → `$(date +%Y_%m_%d)` em 6 ocorrências. Sub-decisão 1 do ADR-001 ganha Adendo v0.2.1 documentando a migration; `CLAUDE.md` linha 25 atualizada (`UTC date` → `local TZ`).
+
+**Decisão arquitetural cross-plugin:** filename de journal usa local TZ (não UTC). Fecha divergência identificada empiricamente em 2026-06-10 — `tjpa-tools` v0.2.0+ usa local TZ desde 2026-06-02 (per /run-plan `tjpa-report-logseq-page`); na janela 21h-23h59 BRT, os 2 plugins produziam filenames diferentes e bullets caíam em journals distintos (split-brain do journal de "hoje"). 4 razões objetivas pra convergência **local TZ vence** (vs UTC vence): intuição diária BRT load-bearing; decisão mais recente prevalece; cross-máquina é teórico hoje (operador single-machine); match com convention Logseq desktop. Plano canonical: [meta-system `docs/plans/journals-tz-cross-plugin-convergencia.md`](https://github.com/fppfurtado/meta-system/blob/main/docs/plans/journals-tz-cross-plugin-convergencia.md).
+
+**Side-effect coerente em `/weekly-review` defer:** linha 76 da SKILL.md (`date -u -d 'next Monday'`) perde `-u` per coerência com decisão local TZ. Comportamento em borda (review feito domingo 21h-23h59 BRT) muda — defer aponta agora pra segunda **local** do operador, não segunda UTC.
+
+**Linhas históricas ADR-001 46/50/70 NÃO tocadas:** referem-se a "Timestamp UTC removido do bloco" em v0.2.0 — narrativa histórica sobre Timestamp do BLOCO (distinto de filename TZ). Preservar.
+
 ## 0.2.0 — 2026-05-28
 
 ### Changed
