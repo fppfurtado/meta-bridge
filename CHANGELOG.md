@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0 — 2026-06-11
+
+### Added
+
+**`/journal-close` v0.3.0 — escopo expandido + template humano-amigável.** Refactor demandado em sessão CC `generalizacao-mecanizacao` (no `meta-system`, 2026-06-11): operador produziu síntese manual em formato divergente do v0.2.0 e identificou explicitamente 2 eixos ("template feito mais pra máquinas/sistemas que pra humanos — sensação de abrir o git log"). Decidida opção (a) via `/triage` (refactor `/journal-close` existente; execução independente do item BACKLOG sobre materialização CLI `mb`). Mudanças:
+
+- **Escopo expandido de DONE-only para DONE + TODO/WAITING + narrativa editorial**: incorpora frame de sessão, insights/pivots conceituais, mudanças finas não-codificadas (memory refinada, padrões reconhecidos), próximos passos com markers GTD nativos, e direção emergente. Cada seção opcional — sessão puramente mecânica degrada elegantemente pra padrão DONE-only flat estilo runbook v0.2.0.
+- **Template humano-amigável substitui git-log-like flat**: linguagem 2ª pessoa quando faz sentido editorial, bullets aninhados ≥3 níveis quando útil, narrativa fluida, GTD markers Logseq nativos como block markers.
+- **Conversation context inspection estendida**: agente runtime inspeciona transcript pra extrair material editorial além de commits (insights, mudanças finas, direção emergente, cross-refs). Julgamento do agente sobre o que vale registrar — não mecânico.
+- **Sub-bullets free-form como caso default** (contract ADR-006 § Decisão § 3 preservado, leitura nuanceada): a convenção é que sub-bullets são prose non-parsed pelos consumers, e v0.3.0 obedece (composição interna da skill, não parsing). `commit:<hash>` e `plan:<slug>` continuam suportados como metadata opcional sob DONE tasks, não obrigatórios.
+- **Idempotência intra-skill parcial pós-retrofit**: dedup `commit:<hash>` mantido pra children com metadata; children narrativos puros sem dedup mecânica. Operador rodando 2× pode duplicar narrativa — mitigação: `Edita via Other` no 2º run. Trade-off aceito.
+- **Princípios editoriais**: brevidade > completude; linguagem 2ª pessoa quando faz sentido; opcionalidade per seção; degradação elegante pra runbook simples quando sessão é magra.
+
+ADR-001 Sub-decisão 3 ganha § Adendo v0.3.0 documentando refinamentos v0.2.0 → v0.3.0 + Gatilho de revisão 13 (cascateamento futuro com materialização CLI `mb` per item 2 do BACKLOG).
+
+**Stop hook `suggest_journal_close.py` permanece intacto** — lógica do hook agnóstica ao formato do bloco que `/journal-close` produz. Mudança de output (v0.2.0 → v0.3.0) é transparente.
+
+### Notes
+
+- `CLAUDE.md` bloco `## Pragmatic Toolkit` realinhado ao estado real do repo via `/init-config`: explicita `paths.plans_dir: null` (alinha YAML à prosa "Sem plans_dir"); remove `decisions_dir: docs/decisions` redundante (canonical default); reconhece `backlog` como canonical implícito (`BACKLOG.md` criado em commit `935e0d8` e operacionalmente usado). Prosa adjacente atualizada removendo declaração stale "Sem `backlog`".
+- `BACKLOG.md` linha do item 1 refinada via `/triage`: lock decisional opção (a) + execução independente do item 2; aponta pra artefatos esperados (rewrite SKILL.md + Adendo v0.3.0 ADR-001).
+
 ## 0.2.1 — 2026-06-10
 
 ### Changed
