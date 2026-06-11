@@ -50,13 +50,13 @@ These paths are hardcoded in skills. Changing them requires patching the skills,
 <!-- pragmatic-toolkit:config -->
 ```yaml
 paths:
-  decisions_dir: docs/decisions
   version_files: [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json"]
   changelog: CHANGELOG.md
+  plans_dir: null
 test_command: null
 ```
 
-Sem `plans_dir` — plans para este plugin moram em [`meta-system`](https://github.com/fppfurtado/meta-system) (cross-cutting orchestration) ou são ad-hoc. Sem `backlog` — follow-ups são capturados via `/note --local` na pasta `.claude/local/` quando relevante.
+`plans_dir: null` declarado — plans deste plugin moram em [`meta-system`](https://github.com/fppfurtado/meta-system) (cross-cutting orchestration) ou são ad-hoc.
 
 ## Histórico
 
