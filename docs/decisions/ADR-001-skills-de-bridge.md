@@ -161,6 +161,37 @@ Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/prag
 
 **Stop hook `suggest_journal_close.py` permanece intacto** — lógica do hook (3 gates: marker `[PRAGMATIC: plan-done]` no transcript + `.claude/local/` exists + Logseq fechado) é agnóstica ao formato do bloco que `/journal-close` produz. Sugestão "considere /journal-close" continua válida; mudança de output da skill é transparente pro hook. Validação no Bloco 3 do plano `onda-4-5-journal-retrofit-gtd` confirma compatibilidade (sem mudança de código).
 
+#### Adendo v0.3.0 (2026-06-11) — escopo expandido + template humano-amigável
+
+Materializa demanda emergida na sessão CC `generalizacao-mecanizacao` (no `meta-system`, 2026-06-11): operador produziu síntese manual de fechamento em formato divergente do v0.2.0 e identificou explicitamente 2 eixos de divergência ("template feito mais pra máquinas/sistemas que pra humanos — sensação de abrir o git log"). Decidida via `/triage` 2026-06-11 (opção (a) — refactor `/journal-close` existente; execução independente do item BACKLOG sobre materialização CLI `mb`). Refinamento mecânico (decisão central intacta — skill ainda sintetiza sessão CC no journal de hoje; muda **escopo** + **template** do bloco produzido).
+
+Refinamentos do diff v0.2.0 → v0.3.0:
+
+- **Escopo expandido de DONE-only para DONE + TODO/WAITING + narrativa editorial**: v0.2.0 limitava ao trabalho mecânico fechado (DONE-tasks + commit/plan metadata). v0.3.0 incorpora também: frame de sessão (1 linha situando), insights/pivots conceituais (header + sub-bullets de prosa), mudanças finas não-codificadas (memory refinada, padrões reconhecidos, notas operacionais), próximos passos com markers GTD nativos (TODO/WAITING), e direção emergente (síntese reflexiva). Cada seção opcional — sessão puramente mecânica degrada elegantemente pra padrão DONE-only flat estilo runbook (preserva caso de uso "fechei trabalho mecânico" da v0.2.0 como sub-caso).
+- **Template humano-amigável substitui git-log-like flat**: v0.2.0 produzia bullets flat estilo `- DONE <commit subject>` + `- commit: <hash>` + `- plan: <slug>` (operador metáfora literal: "sensação de abrir o git log"). v0.3.0 usa linguagem humana 2ª pessoa quando faz sentido editorial, bullets aninhados ≥3 níveis quando útil, narrativa fluida, GTD markers Logseq nativos (DONE/TODO/WAITING como block markers, não prefixos prosa).
+- **Conversation context inspection estendida (novo)**: agente runtime inspeciona transcript da sessão pra extrair material editorial além de commits (insights, mudanças finas, próximos passos enunciados pelo operador, direção emergente, cross-refs). Julgamento do agente sobre o que vale registrar — não mecânico. v0.2.0 inspecionava conversation context só pra enumerar cwds tocados (multi-repo); v0.3.0 estende escopo da inspeção a substância editorial.
+- **Sub-bullets free-form (contract ADR-006 § Decisão § 3 preservado, leitura nuanceada)**: v0.2.0 declarava sub-bullets "limitados a `commit:`/`plan:`/`[[<page>]]`" porque a skill só PRODUZIA esses tipos de metadata mecânica. v0.3.0 produz prose livre como caso default — mas o contract ADR-006 ("sub-bullets free-form prose, non-parsed pelos consumers") está intacto: a convenção é sobre o que consumers parseiam, e v0.3.0 obedece (composição interna da skill, não parsing). `commit:<hash>` e `plan:<slug>` continuam suportados como metadata opcional sob DONE tasks (rastreabilidade quando material), não obrigatórios.
+- **Idempotência intra-skill via dedup `commit:<hash>` (parcial pós-retrofit)**: v0.2.0 garantia idempotência intra-skill via dedup de hash em pré-write. v0.3.0 mantém esse mecanismo pra children com metadata `commit:`, mas children narrativos puros (frame, insight, mudanças finas, próximos passos, direção) **não têm dedup mecânica** — operador rodando `/journal-close` 2× pode duplicar conteúdo narrativo. Mitigação: aceitar `Edita via Other` no 2º run pra revisar/consolidar. Trade-off aceito conscientemente (escopo expandido sacrifica idempotência intra-skill perfeita; Stop hook fires múltiplas vezes deixa de ser totalmente coberto por hash dedup).
+- **Brevidade > completude como princípio editorial**: v0.3.0 explicita que sessão simples (1 fix pequeno) não deve inflar pra inventar insight/direção. Degradação elegante pro padrão runbook v0.2.0 é caso legítimo, não fallback de emergência.
+- **Linguagem 2ª pessoa quando faz sentido editorial**: operador é o leitor do journal; prosa de manual ("o sistema realizou X") fica esquisita. Convenção editorial nova, não rule rígida — "quando faz sentido" preserva julgamento.
+- **Frontmatter `description` atualizada**: v0.2.0 dizia "Sintetiza sessão CC em tasks DONE agrupadas por #domínio no journal Logseq de hoje" (DONE-only); v0.3.0 diz "Sintetiza sessão CC no journal Logseq de hoje — narrativa humano-amigável agrupada por #domínio (DONE + TODO/WAITING + insights)".
+- **Coleção de princípios editoriais documentada no SKILL.md Step 3**: 2ª pessoa, bullets aninhados, opcionalidade per seção, GTD markers nativos, sub-bullets free-form, brevidade > completude. Substitui a lista compacta da v0.2.0 ("buckets, sub-bullets mecânicos limitados") por mental model rico que o agente runtime aplica como editor.
+
+Pré-condições v0.3.0 herdadas intactas: `pgrep -xi logseq` gate (Sub-decisão 7 + Adendo v0.1.2), failure-closed; gate git repo preservado (skill deriva basename do cwd como repo principal); coleta multi-repo via probe explícito + fallback single-repo; find-or-create idempotente cross-skill com `/journal-note` (contract ADR-006 § Decisão § 1); bootstrap journal via `daily-journal.md` template.
+
+**Referência editorial concreta (forma do dado real)**: bucket `- #meta-system` em `~/Notes/logseq/journals/2026_06_11.md` linhas 11-51 — síntese manual da sessão `generalizacao-mecanizacao` é o exemplo canônico do template humano-amigável esperado. Operador produziu manualmente, identificou divergência do v0.2.0, demandou refactor.
+
+**Stop hook `suggest_journal_close.py` permanece intacto** (re-confirmado em v0.3.0) — lógica do hook (3 gates: marker `[PRAGMATIC: plan-done]` + `.claude/local/` + Logseq fechado) é agnóstica ao formato do bloco que `/journal-close` produz. Mudança de output da skill (v0.2.0 → v0.3.0) é transparente pro hook; sem mudança de código no `hooks/suggest_journal_close.py`.
+
+**Gatilho de revisão v0.3.0 → futuro v0.4.0** (registrado nos gatilhos gerais da § Gatilhos de revisão; ver gatilho 13 abaixo): se item 2 do BACKLOG (materialização CLI `mb`) for executado, template humano-amigável pode mover pra módulo Python (Click/Typer) com flag `--reflective` vs `--mechanical`, colapsando v0.3.0 + degradação runbook em flag explícita. Adendo v0.4.0 (ou ADR novo se decisão central muda) materializa.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (skill `/journal-close` sintetiza sessão CC no journal de hoje); sem categoria nova; sem restrição externa nova; caráter explicativo + refinamento (forma de produção, não objeto produzido).
+
+Cross-refs:
+- `BACKLOG.md` linha item 1 (refinada em commit `da01637`, lock decisional via `/triage` 2026-06-11).
+- `.claude/local/NOTES.md § 2026-06-11` — pedido literal integral do operador + análise dual-eixo.
+- `meta-system` BACKLOG commit `5294c0f` — entry recíproca upstream (dual-entry pattern reconhecido nesta sessão como mitigação F3).
+
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
 Skill `skills/init-logseq-project/SKILL.md`. Frontmatter:
@@ -418,6 +449,7 @@ Skills com `--pkm <type>` flag e backend per-PKM.
 10. **Paths absolutos hardcoded mudam**: revisar Sub-decisão 4 + CLAUDE.md.
 11. **Project Template ganha prop mecânica nova**: adendo aqui estendendo a lista de 4 props.
 12. **Demand concreto por outros PKMs** (≥2 reports): reabrir Alternativa "Generalize" + criar abstração mínima.
+13. **Item 2 do BACKLOG (materialização CLI `mb`) executado**: template humano-amigável de `/journal-close` v0.3.0 pode mover pra módulo Python (Click/Typer) com flag `--reflective` vs `--mechanical`, colapsando v0.3.0 + degradação runbook em flag explícita. Adendo v0.4.0 (ou ADR novo se decisão central muda) materializa.
 
 ## Implementação
 
