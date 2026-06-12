@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — 2026-06-12
+
+### Added
+
+**`/journal-load` — read-only carregamento de journal Logseq na sessão CC.** Nova skill que fecha a simetria read-write do bridge (par com `/journal-note` append + `/journal-close` write final). Default = journal de hoje, integral. Flags opcionais: `--days N` estende janela retroativa (N+1 dias inclusive); `--bucket #<hashtag>` restringe a um bucket específico. Surface conteúdo agrupado por data em ordem cronológica reversa. Read-only — primeira skill do plugin isenta do gate `pgrep -xi logseq` (race window não materializa em leitura concorrente).
+
+ADR-001 ganha Sub-decisão 9 (mechanics completa) + Adendo (2026-06-12) a Sub-decisão 7 (critério canonical: gate aplica somente onde há side-effect; read-only é exceção doutrinária). Tabela de Sub-decisão 8 acrescenta linha para `/journal-load`. `marketplace.json` description acrescenta menção da nova skill.
+
+### Notes
+
+- `BACKLOG.md`: cross-ref `/journal-note` + `/init-logseq-project` POSITIVO no mechanical-skills-scan do meta-system (commit `1b33b86`).
+
 ## 0.3.0 — 2026-06-11
 
 ### Added
