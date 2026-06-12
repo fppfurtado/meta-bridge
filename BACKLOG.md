@@ -8,6 +8,8 @@
 
 ## Concluídos
 
+- 2026-06-12 — Refactor editorial `/journal-close` v0.4.1 (3 refinamentos nos princípios de síntese: granularidade DONE por conceito não commit; filtros de seleção em "Material editorial"; 3 antipadrões em "O que NÃO fazer"; ADR-001 Sub-decisão 3 § Adendo v0.4.1). Commit `894e930`; release [v0.5.1](https://github.com/fppfurtado/meta-bridge/releases/tag/v0.5.1).
+
 - 2026-06-12 — Refactor `/journal-close` v0.4.0 (reconciliação prévia com janela `--days N` + modify-in-place no source pra TODO/WAITING fechados pela sessão; ADR-001 Sub-decisão 3 § Adendo v0.4.0). Commits `cc7f225`, `a693902`; release [v0.5.0](https://github.com/fppfurtado/meta-bridge/releases/tag/v0.5.0).
 
 - 2026-06-11 — Refactor `/journal-close` v0.3.0 (escopo expandido DONE + TODO/WAITING + insights/reflexão direcional; template humano-amigável 2ª pessoa substituindo schema git-log-like flat; ADR-001 Sub-decisão 3 § Adendo v0.3.0). Commits `32ad30c`, `9365efb`; release [v0.3.0](https://github.com/fppfurtado/meta-bridge/releases/tag/v0.3.0).
