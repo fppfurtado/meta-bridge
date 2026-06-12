@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.1 — 2026-06-12
+
+### Changed
+
+**`/journal-close` v0.4.1 — refinamento editorial dos princípios de síntese.** Diagnóstico empírico pós-v0.4.0: comparação entre bucket `#meta-system` em `~/Notes/logseq/journals/2026_06_11.md` (síntese manual referência) e fechamentos subsequentes produzidos pela skill revelou 3 antipadrões — enumeração de commits 1:1 como DONE separados, "Mudanças finas" capturando detalhe técnico-operacional (version pins de cache, paths absolutos, byte counts), seções operacionais cronológicas como bullets editoriais ("Pre-trabalho que estruturou", "Validações por carregamento manual").
+
+SKILL.md ganha 3 refinamentos editoriais (sem mudança de fluxo, Steps numerados intactos):
+
+- **§3a Granularidade e profundidade**: DONE segue conceito não commit (top-level = movimento conceitual; commits viram sub-bullets quando carregam contexto). Profundidade livre com filtro qualitativo do "próximo nível" (substância vs enumeração). Brevidade vence completude mesmo em sessão rica.
+- **§2b Filtros de seleção em "Material editorial"**: insight/pivot 1-2 por sessão; "Mudanças finas" filtra por "isto vai informar futuras decisões?" (pattern semântico passa; detalhe técnico-operacional não); próximos passos só os enunciados pelo operador.
+- **3 antipadrões em "O que NÃO fazer"**: commits enumerados como DONEs separados, detalhe técnico-operacional em "Mudanças finas", seções operacionais cronológicas.
+
+ADR-001 Sub-decisão 3 ganha § Adendo v0.4.1 (refinamento editorial per ADR-034: decisão central intacta; muda **princípios editoriais que governam o output**, não mecânica de coleta ou write).
+
+### Notes
+
+- Drift cleanup pós-v0.5.0: `CLAUDE.md` realign (4→5 skills, 8→9 sub-decisões, templates archived flag) + `BACKLOG.md` entries `## Próximos → ## Concluídos` para v0.3.0 + v0.5.0.
+
 ## 0.5.0 — 2026-06-12
 
 ### Added
