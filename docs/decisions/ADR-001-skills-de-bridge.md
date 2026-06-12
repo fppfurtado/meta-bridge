@@ -229,6 +229,32 @@ Pré-condições v0.4.0 herdadas intactas: gates Sub-decisão 7; gate git repo p
 
 Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (skill `/journal-close` sintetiza sessão CC no journal de hoje); sem categoria nova; sem restrição externa nova; caráter explicativo + refinamento (fluxo de coleta + scope de write expandidos).
 
+#### Adendo v0.4.1 (2026-06-12) — refinamento editorial dos princípios de síntese
+
+Materializa diagnóstico empírico pós-v0.4.0: operador comparou o bucket `- #meta-system` em `~/Notes/logseq/journals/2026_06_11.md` (síntese manual referência, satisfatória — agrupamento conceitual, "Mudanças finas" capturando pattern semântico) com fechamentos subsequentes produzidos pela skill v0.3.0/v0.4.0 nos journals `2026_06_12.md` e identificou queda de qualidade: enumeração de commits 1:1 como DONE separados (em vez de agrupamento conceitual), "Mudanças finas" capturando detalhe técnico-operacional (version pins de cache, paths absolutos, byte counts), seções operacionais cronológicas aparecendo como bullets editoriais ("Pre-trabalho que estruturou a sessão", "Validações por carregamento manual"). Refinamento editorial (decisão central intacta — skill segue sintetizando sessão CC no journal de hoje; muda **princípios editoriais que governam o output** da composição in-skill).
+
+Refinamentos do diff v0.4.0 → v0.4.1 (todos em SKILL.md, sem mudança de fluxo ou estrutura de Steps):
+
+- **Granularidade DONE refinada (Step 3a § Granularidade e profundidade)**: regra explícita "DONE granularidade segue conceito, não commit". Top-level descreve movimento (cristalização, migração, ship, refactor); commits e atomic tasks moram em sub-bullets quando carregam contexto, não como DONE separados. Quando 3-5 commits formaram um movimento conceitual único, agrupar sob **DONE \<conceito\>** com os relevantes (não todos) abaixo.
+- **Profundidade livre + critério qualitativo do "próximo nível"**: regra v0.3.0 "bullets aninhados ≥3 níveis quando útil" reformulada — não há teto. Sinal de degradação não é profundidade, é o que aparece no próximo nível. Filtro mental por nível ao descer: "adiciona substância (alternativa rebatida, consequência fina, ressalva) ou só enumeração (mais commits, mais cenários, mais atomic tasks)?". Substância → desce. Enumeração → para.
+- **Brevidade vence completude mesmo em sessão rica**: refinamento da v0.3.0 ("brevidade > completude quando substância é magra") — agora regra aplica também a sessão rica. Sessão de 15 commits provavelmente comporta 4-6 DONE top-level conceituais, não 15.
+- **Filtros de seleção em "Material editorial via conversation context" (Step 2b)**: cada bloco editorial ganha filtro explícito de inclusão:
+  - **Insight/pivot**: 1-2 por sessão (raramente 3), mesmo em sessão longa.
+  - **Mudanças finas**: critério "isto vai informar futuras decisões?". Pattern semântico passa; detalhes técnicos-operacionais (version pins, paths absolutos, byte counts, contagens de cenários de smoke test, IDs de memory entries) quase sempre falham.
+  - **Próximos passos**: só os enunciados pelo operador ou que emergiram com clareza — não inflar com extrapolações.
+- **3 itens novos em "O que NÃO fazer"** correspondendo aos antipadrões observados nos fechamentos pós-v0.3.0: enumerar commits como DONEs separados; detalhes técnicos-operacionais em "Mudanças finas"; seções operacionais cronológicas.
+
+Pré-condições v0.4.1 herdadas intactas: todos os gates e mecânicas de v0.4.0 preservados; sem mudança de fluxo, Steps numerados intactos, frontmatter `description` inalterada (escopo de produção segue v0.4.0).
+
+**Referência editorial reforçada**: bucket `- #meta-system` em `~/Notes/logseq/journals/2026_06_11.md` (linhas 11-51) continua sendo o exemplo canônico — Adendo v0.4.1 codifica o que esse exemplo encarna implicitamente (agrupamento conceitual, "Mudanças finas" como pattern, ausência de seções operacionais cronológicas).
+
+**Stop hook `suggest_journal_close.py` permanece intacto** (re-confirmado em v0.4.1) — refinamento é editorial, sem mudança de mecânica.
+
+**Cross-refs:**
+- Diagnóstico empírico: comparação manual do operador entre `~/Notes/logseq/journals/2026_06_11.md` linha 11+ (referência satisfatória) e `~/Notes/logseq/journals/2026_06_12.md` linha 1+ (regressão pós-v0.4.0).
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (skill `/journal-close` sintetiza sessão CC no journal de hoje); sem categoria nova; sem restrição externa nova; caráter explicativo + refinamento (princípios editoriais que governam o output, não mecânica de coleta ou write).
+
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
 Skill `skills/init-logseq-project/SKILL.md`. Frontmatter:

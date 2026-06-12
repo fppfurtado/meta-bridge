@@ -52,12 +52,12 @@ A síntese **sempre** é appendada no journal de hoje — janela retroativa afet
   1. **Lista cwds tocados**: agente que executa skill enumera cwds visitados na sessão via inspect do conversation history (toolkit pattern). Inclui cwd corrente + paths absolutos de outros repos onde agente fez Bash/Read/Edit. Único: deduplicar paths.
   2. **`git log` em cada cwd descoberto**: para cada path, `cd <path> && git log --since="<start-of-session>" --oneline --no-merges`. Falha (path não é repo, vazio) → skip silente.
 - Cada commit captura: subject, hash short (7 chars), repo basename. Resultado: lista [(repo, hash, subject), ...] cobrindo todos os repos tocados.
-- **Material editorial via conversation context**: agente inspeciona o transcript da sessão pra extrair além de commits:
-  - **Frame de sessão**: como começou + para onde virou (ex.: "Começou querendo X, desembocou em Y").
-  - **Insight/pivot conceitual**: o momento que mudou direção, quando há um.
-  - **Mudanças finas**: memory refinada, padrões reconhecidos, notas operacionais não-codificadas em commits.
-  - **Próximos passos enunciados pelo operador** com markers GTD (TODO/WAITING).
-  - **Direção emergente**: síntese reflexiva sobre onde a constelação está indo.
+- **Material editorial via conversation context**: agente inspeciona o transcript da sessão pra extrair além de commits. Filtros de seleção (v0.4.1) aplicados em cada bloco — capturar não é enumerar, é selecionar.
+  - **Frame de sessão**: como começou + para onde virou (ex.: "Começou querendo X, desembocou em Y"). Sempre 1 linha — frame longo vira insight.
+  - **Insight/pivot conceitual**: o momento que mudou direção, quando há um. **Selecionar 1-2 por sessão** (raramente 3), mesmo em sessão longa — o leitor humano não absorve 5 insights numa releitura rápida. Sessão sem pivot claro omite o bloco.
+  - **Mudanças finas**: memory refinada, padrões reconhecidos, notas operacionais não-codificadas em commits. **Critério de inclusão: "isto vai informar futuras decisões?"**. Pattern semântico ("dual-entry pattern reconhecido", "feedback memory X refinada porque Y") passa. Detalhes técnicos-operacionais (version pins de cache, paths absolutos, byte counts, contagens de cenários de smoke test, IDs de memory entries) quase sempre falham o critério — são debug notes de um momento, não substância que orienta o futuro.
+  - **Próximos passos enunciados pelo operador** com markers GTD (TODO/WAITING). **Só os enunciados pelo operador ou que emergiram com clareza da sessão** — não inflar com "próximos passos potenciais" que o agente extrapolaria.
+  - **Direção emergente**: síntese reflexiva sobre onde a constelação está indo. 1-3 bullets curtos; síntese, não enumeração de consequências.
   - **Cross-refs** ([[page]], links markdown) que emergem do contexto.
   - **Julgamento do agente** sobre o que vale registrar — não mecânico. Sessão sem substância editorial além de DONE-tasks degrada elegantemente pra padrão runbook simples (ver Step 3).
 - **Journal path (destino da síntese)**: `~/Notes/logseq/journals/$(date +%Y_%m_%d).md`.
@@ -123,16 +123,21 @@ Para cada repo/domínio identificado no Step 2b, agente compõe rascunho seguind
 		- <bullet de prosa reflexiva>
 ```
 
-**Princípios editoriais** (v0.3.0):
+**Princípios editoriais** (v0.3.0 + refinamentos v0.4.1):
 
 - **Linguagem humana 2ª pessoa quando faz sentido editorial** ("você decidiu X", "você rebateu argumento Y").
-- **Bullets aninhados ≥3 níveis quando útil** — narrativa fluida, não flat git-log.
 - **Cada seção opcional** — sessão sem insight pivot omite o bloco; sessão puramente mecânica degrada elegantemente pra DONE-only flat estilo runbook.
 - **GTD markers Logseq nativos** (DONE/TODO/WAITING) preservados como block markers, não prefixos prosa.
 - **Sub-bullets free-form** per ADR-006 § Decisão § 3 — produzem prose, não só metadata mecânica.
 - **`commit:<hash>`/`plan:<slug>` continuam suportados** como metadata opcional sob DONE tasks, não obrigatórios.
 - **Cross-refs inline** ([[page]], links markdown) emergem do contexto.
-- **Brevidade > completude** — não inflar narrativa quando substância é magra.
+
+**Granularidade e profundidade** (v0.4.1):
+
+- **DONE granularidade segue conceito, não commit**. Top-level descreve um *movimento* (cristalização doutrinal, migração, ship, refactor); commits e sub-tasks aparecem em sub-bullets só quando carregam contexto. Quando 3-5 commits formaram um movimento conceitual único, agrupar sob **DONE \<conceito\>** com os commits relevantes (não todos) abaixo.
+- **Aprofundamento de árvore livre** — leve fundo quanto o material editorial sustentar (insights aninhados, alternativas rejeitadas, sub-tradeoffs, contexto de decisão). Não há teto de profundidade.
+- **Sinal de degradação não é profundidade — é o que aparece no próximo nível**. Filtro mental por nível ao descer: "adiciona substância (alternativa rebatida, consequência fina, ressalva) ou só enumeração (mais commits, mais cenários, mais atomic tasks)?". Substância → desce. Enumeração → para; o material já está dito acima.
+- **Brevidade vence completude mesmo em sessão rica** — fechamento humano-amigável seleciona; o leitor humano não relê o trabalho inteiro, releme a substância. Sessão rica que produziu 15 commits provavelmente comporta 4-6 DONE top-level conceituais, não 15.
 
 #### 3b. Fase de reconciliação (novo em v0.4.0)
 
@@ -268,6 +273,9 @@ Exit.
 - Não forçar estrutura template rígida — cada seção (frame, insight, mudanças finas, próximos passos, direção) é opcional; sessão simples degrada elegantemente pra DONE-only flat estilo runbook.
 - Não 3ª pessoa formal robótica — linguagem 2ª pessoa quando faz sentido editorial.
 - Não inflar narrativa — brevidade vence completude quando substância é magra.
+- **Não enumerar cada commit como DONE separado** (v0.4.1) quando 3-5 commits formaram um movimento conceitual único — agrupar sob **DONE \<conceito\>** com os commits que carregam contexto em sub-bullets (não todos). Árvore DONE que ao descer só revela mais commits é runbook disfarçado de narrativa; ao descer revelando alternativas rejeitadas, consequências finas ou ressalvas, é narrativa legítima.
+- **Não capturar detalhes técnicos-operacionais em "Mudanças finas"** (v0.4.1) — version pins de cache, paths absolutos, workarounds shell, byte counts, contagens de cenários de smoke test, IDs de memory entries. Filtrar por critério "isto vai informar futuras decisões?" — debug notes de um momento quase sempre falham. Pattern semântico passa; trace de execução não.
+- **Não criar seções operacionais cronológicas** (v0.4.1) — "Pre-trabalho que estruturou a sessão", "Validações por carregamento manual", "Allowlist X — N classificados". Sessão se descreve pela substância editorial (insights, decisões, direção), não pela cronologia das fases que ela atravessou. Substância de QA/pre-trabalho cabe sob DONE conceitual relevante (sub-bullet "validado em N cenários" se valer) ou desaparece se não passar o filtro de inclusão.
 - **Não anotar sub-bullet `→ closed em sessão X` sob marker original quando aplica modify-in-place** (novo em v0.4.0) — SSOT in-place per ADR-002 Sub-decisão 4 (transição = marker change; trail explícito vira redundância). Operador rejeitou opção "annotation cross-ref" via `/triage` 2026-06-12.
 - **Não criar bullet `DONE X (closes TODO de YYYY-MM-DD)` no novo bucket** (novo em v0.4.0) — same SSOT logic (DONE no novo bucket é registro novo do trabalho; closure de antigo é marker change in-place; redundância elimina-se naturalmente).
 - **Não estender janela retroativa default sem `--days N`** (novo em v0.4.0) — N=0 é o caso comum (sessões mesmo-dia); N>0 é opt-in explícito.
