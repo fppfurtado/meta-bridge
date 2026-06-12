@@ -354,6 +354,16 @@ Substituir por `pidof`, `ps -A | grep`, ou outras variantes **não aceito**. Raz
 
 v0.1.0/0.1.1 declararam canonical `pgrep -x logseq` (case-sensitive). Validação manual da Onda 4 do meta-system (Sessão 6) detectou que o processo real do AppImage Logseq aparece como `Logseq` em `pgrep` — gate retornava falso-negativo com desktop aberto, quebrando a invariante failure-closed que toda a Camada 3 depende. Bug afetava 4 skills + hook (5 arquivos). Fix em v0.1.2: `-x` → `-xi`. Sem ADR novo: refinamento mecânico, sem mudança de critério (probe canonical permanece `pgrep`; portability ainda baseline; aplicação ainda nas 4 skills).
 
+#### Adendo (2026-06-12) — Gate aplica somente onde há side-effect
+
+Sub-decisão 9 introduz `/journal-load`, primeira skill read-only do plugin — Read integral ou bloco-de-bucket dos journals na janela, sem write no graph. Race window que motivou o gate `pgrep -xi logseq` **não materializa em leitura concorrente**: Logseq desktop aberto não corrompe filesystem da leitura externa; pode haver delta no buffer não-flushed do desktop, mas isso vira "ligeiramente stale", não corruption.
+
+Critério canonical refinado: gate aplica somente onde há side-effect no graph. As 4 skills write (`/journal-note`, `/journal-close`, `/init-logseq-project`, `/weekly-review`) mantêm `pgrep -xi logseq` failure-closed; skills read-only (`/journal-load` agora, futuras read-only) ficam isentas.
+
+Trade-off do bypass aceito: leitura com desktop aberto pode mostrar conteúdo ligeiramente stale (último write do operador no desktop ainda não persistiu em disco). Mitigação: operador que precisa garantir freshness fecha o desktop antes de invocar. Default permissivo evita friction no caso comum (consulta rápida ao journal sem reabrir hábitos de fechar Logseq).
+
+Sem ADR novo: refinamento mecânico do critério de aplicação. Decisão central intacta (`pgrep` permanece probe canonical; failure-closed permanece para writes; portability baseline preservada). Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério.
+
 ### Sub-decisão 8 — AskUserQuestion cardinality + frontmatter roles
 
 **Cardinalidade max 4 perguntas** por chamada `AskUserQuestion` per [pragmatic-dev-toolkit CLAUDE.md](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/CLAUDE.md) → AskUserQuestion mechanics.
@@ -366,10 +376,59 @@ v0.1.0/0.1.1 declararam canonical `pgrep -x logseq` (case-sensitive). Validaçã
 | `/journal-close` | _(roles ausentes)_ |
 | `/init-logseq-project` | _(roles ausentes)_ |
 | `/weekly-review` | _(roles ausentes)_ |
+| `/journal-load` | _(roles ausentes)_ |
 
 Skills da Bridge **não consomem papéis canonical do toolkit** (Resolution protocol per ADR-003 do toolkit, aplicado vazio). Consomem 2 paths absolutos hardcoded fora do path contract — `~/.mrconfig` e `~/Projects/meta-system/REPOS.md` — plus filesystem do graph (`~/Notes/logseq/`). Mudança desses paths exige adendo neste ADR.
 
 Implicação: skills da Bridge **não traversam Resolution protocol step 3** (operador-prompt). Cutucada de descoberta do toolkit **não aplica** — mesmo padrão de `/note` no toolkit (ADR-032).
+
+### Sub-decisão 9 — `/journal-load` mechanics
+
+Skill `skills/journal-load/SKILL.md`. Frontmatter:
+- `name: journal-load`
+- `description: Carrega conteúdo de journals Logseq na sessão CC (read-only) — default journal de hoje; flags --days N retroativo + --bucket #<hashtag>`
+- `disable-model-invocation: false`
+
+Skill **read-only** sem efeito no graph. Sem gate `pgrep -xi logseq` per Adendo a Sub-decisão 7. Sem gate git repo — operador invoca de qualquer cwd; `--bucket` é hashtag literal explicitada pelo operador, não derivada de repo basename. Materializa o gatilho 9 deste ADR ("Skill nova emerge necessária na Bridge").
+
+Passos:
+
+1. Parse args:
+   - `--days N` (opcional, default 0): inteiro N ≥ 0. Janela = [hoje-N, hoje] inclusive (N+1 dias). N < 0 ou não-inteiro → recusa com `--days exige N >= 0`.
+   - `--bucket <hashtag>` (opcional, default = sem filtro): aceita com ou sem `#` prefix (`#meta-bridge` ou `meta-bridge`); sanitização kebab-case lowercase aplicada per convention de Sub-decisão 1 Adendo v0.2.0.
+   - Args mutuamente compatíveis. Sem args → default = journal de hoje, conteúdo integral.
+
+2. Resolve paths dos journals na janela:
+   - Shell: `for i in $(seq 0 N); do date -d "$i days ago" +%Y_%m_%d; done` → cada item formatado como `~/Notes/logseq/journals/<date>.md`.
+   - Local TZ alinhado per Adendo v0.2.1 a Sub-decisão 1 (consumer da convergência cross-plugin).
+   - Paths ausentes → silent skip (journal não criado pra aquele dia é comportamento esperado em dias inativos).
+
+3. Read filemask:
+   - **Sem `--bucket`**: Read integral de cada journal existente na janela.
+   - **Com `--bucket <hashtag>`**: extrair APENAS o bloco do bucket por journal — regex inicial `^- #<hashtag>($| )` (top-level, zero tab; análogo ao probe de bucket em Sub-decisão 1 Adendo v0.2.0); leitura sequencial até próxima linha matching `^- ` (próximo top-level — bucket, nota livre, ou outra entrada) ou EOF. Sub-bullets aninhados (≥1 tab) preservados como parte do bloco extraído. Bucket ausente naquele dia → silent skip.
+
+4. Surface o conteúdo extraído em texto agrupado por data, ordem cronológica reversa (mais recente primeiro):
+   ```
+   ## Journal YYYY-MM-DD (~/Notes/logseq/journals/<date>.md)
+   <conteúdo extraído literal>
+
+   ## Journal YYYY-MM-DD (~/Notes/logseq/journals/<date>.md)
+   <conteúdo extraído literal>
+   ```
+   Output direto no response stream — CC carrega o conteúdo na working memory, disponível para reasoning subsequente na sessão. Sem síntese, sem comentário editorial — load context é primitiva, não interpretação.
+
+5. Reporta sumário pós-output (1-2 linhas): `<M de N journals lidos na janela [hoje-N, hoje]>` + bucket aplicado (se houver).
+
+**Edge cases:**
+
+- Janela inteira sem journals existentes → recusa silenciosa com `nenhum journal encontrado na janela [<hoje-N>, <hoje>]`.
+- Janela inteira com `--bucket` mas sem matches em nenhum journal → recusa silenciosa com `bucket #<hashtag> ausente na janela [<hoje-N>, <hoje>]`.
+- `--bucket` com hashtag inexistente no histórico não detectado em parse-time; só na fase de matching (recusa silenciosa acima).
+- N grande (ex.: `--days 90`) sem `--bucket` pode floodar context window. Aceito sem cap — escolha do operador; `--bucket` é a mitigação canonical pra janelas amplas.
+
+**Skill name `journal-load`** vs alternativas (`journal-read`, `journal-context`, `load-journal`): coerente com o par `journal-note` (append) + `journal-close` (write final). Verbo `load` carrega semântica de "trazer para working memory" mais clara que `read` (sugere display passivo).
+
+**Cross-skill semantics**: `/journal-load` é independente das 4 skills existentes. Não compartilha probe-de-janela com `/weekly-review` (purpose distinto — load context vs classify GTD); não exige ordem com `/journal-note` (read-only não corrompe writes pendentes); pode ser invocada em qualquer ponto da sessão (default = hoje captura state corrente).
 
 ## Consequências
 
