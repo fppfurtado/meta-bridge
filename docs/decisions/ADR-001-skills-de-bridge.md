@@ -192,6 +192,43 @@ Cross-refs:
 - `.claude/local/NOTES.md § 2026-06-11` — pedido literal integral do operador + análise dual-eixo.
 - `meta-system` BACKLOG commit `5294c0f` — entry recíproca upstream (dual-entry pattern reconhecido nesta sessão como mitigação F3).
 
+#### Adendo v0.4.0 (2026-06-12) — reconciliação prévia com journal pré-existente
+
+Materializa refinamento decidido via `/triage` 2026-06-12: antes de compor síntese, skill consulta conteúdo prévio gravado em journals (sessões anteriores mesmo-dia + janela retroativa configurável) e reconcilia transições — TODO/WAITING anteriores fechados pela sessão corrente recebem marker change in-place no journal source. Refinamento mecânico (decisão central intacta — skill ainda sintetiza sessão CC no journal de hoje; muda **fluxo de coleta** + **scope de write** pra incluir update de markers em journals prévios).
+
+Refinamentos do diff v0.3.0 → v0.4.0:
+
+- **Janela retroativa de leitura prévia (novo)**: flag `--days N` (default 0 = só journal de hoje). N=0 cobre sessões anteriores mesmo-dia; N>0 estende pra dias passados. Paralelo doutrinal a `/journal-load` (Sub-decisão 9) — mesmo mecanismo de janela `--days N` per Adendo v0.2.1 (local TZ).
+
+- **Step novo entre coleta de session context e síntese (Step 2.5)**: ler buckets pré-existentes na janela cross-repo (todos os buckets em todos os journals lidos). Para cada bucket, coletar markers `TODO`/`DOING`/`WAITING` ativos via regex análoga a `/weekly-review` Sub-decisão 5 § Adendo v0.2.0 (`^\t- (TODO|DOING|WAITING) (.*)$`, 1-tab indent restrita). Estes formam o **backlog reconciliável** da invocação.
+
+- **Reconciliação na fase de synthesis (Step 3 refinado)**: agente confronta backlog reconciliável com session context. Match via judgment semântico (DONE/commit/plan atual fecha TODO/WAITING anterior?); cross-refs explícitos (`commit:<hash>`, `plan:<slug>`, `[[<page>]]`) em prior content servem como hint forte quando matching textual ambíguo.
+
+- **Modify-in-place no source quando match confirmado (Step 5 refinado)**: marker change `TODO`/`DOING`/`WAITING` → `DONE` no journal source onde foi capturado. Sub-bullets preservados. Mecânica idêntica a `/weekly-review archive`. **Sem annotation extra** sob o marker original — SSOT in-place per ADR-002 Sub-decisão 4 do logseq-notes ("markers nativos como SSOT in-place"). Operador escolheu opção pura via `/triage` (rejeitou annotation cross-ref e append-only alternativas).
+
+- **Synthesis pós-reconciliação**: rascunho do novo bucket reflete trabalho da sessão corrente (DONE tasks + frame/insight/etc per v0.3.0); reconciliação aparece **implicitamente** — DONE no novo bucket é o registro do trabalho, marker change no source materializa a transição. Sem "closure cross-ref bullet" no novo bucket — redundância natural elimina-se.
+
+- **Synthesis-then-confirm estendido**: `AskUserQuestion` única apresenta (a) rascunho do novo bucket per v0.3.0 + (b) lista de transições in-place propostas (paths + linhas + before→after). Operador confirma ambos juntos, edita via Other, ou recusa.
+
+- **Cross-repo escopo do scan**: per decisão `/triage`, todos os buckets na janela entram no scan (mesmo-repo `#<basename>` + cross-repo `#<outro-domínio>`). Sessão de meta-bridge pode fechar TODO em `#meta-system` se conexão material existe.
+
+- **Window vazia ou sem matches reconciliáveis**: degrada elegantemente. Sem prior content → flow v0.3.0 puro (rascunho do novo bucket + write append). Prior content sem matches reconciliáveis → idem (Step novo lê contexto sem trigger de modify-in-place).
+
+- **Idempotência intra-skill preservada parcial** (já era parcial em v0.3.0): dedup por `commit:<hash>` continua; modify-in-place é idempotente per natureza (marker já DONE não muda na 2ª execução).
+
+- **Gate `pgrep -xi logseq` mantido**: skill v0.4.0 segue write (incluindo modify-in-place em journals prévios) — gate failure-closed permanece. Skill **não** se torna read-only — caso da exceção Sub-decisão 7 Adendo (2026-06-12) não aplica.
+
+Pré-condições v0.4.0 herdadas intactas: gates Sub-decisão 7; gate git repo preservado; coleta multi-repo per probe explícito + fallback single-repo; find-or-create idempotente cross-skill com `/journal-note`; bootstrap journal via `daily-journal.md` template.
+
+**Frontmatter `description` atualizada**: v0.3.0 era "Sintetiza sessão CC no journal Logseq de hoje — narrativa humano-amigável agrupada por #domínio (DONE + TODO/WAITING + insights)"; v0.4.0 acrescenta sufixo "+ reconciliação prévia (--days N)".
+
+**Cross-refs:**
+- `/weekly-review` Sub-decisão 5 § Adendo v0.2.0 — paralelo mecânico (markers in-place SSOT, archive).
+- `/journal-load` Sub-decisão 9 — paralelo de flag `--days N`.
+- ADR-002 Sub-decisão 4 do logseq-notes — invariante "markers nativos como SSOT in-place" preservada.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (skill `/journal-close` sintetiza sessão CC no journal de hoje); sem categoria nova; sem restrição externa nova; caráter explicativo + refinamento (fluxo de coleta + scope de write expandidos).
+
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
 Skill `skills/init-logseq-project/SKILL.md`. Frontmatter:
