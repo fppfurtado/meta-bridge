@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0 — 2026-06-12
+
+### Added
+
+**`/journal-close` v0.4.0 — reconciliação prévia com journal pré-existente.** Antes de compor síntese, skill lê buckets já gravados em journals na janela retroativa configurável via flag `--days N` (default 0 = só hoje) e reconcilia transições: TODO/WAITING anteriores fechados pela sessão corrente recebem marker change in-place no journal source (paralelo a `/weekly-review archive`). SSOT in-place per ADR-002 Sub-decisão 4 do logseq-notes preservado — sem annotation extra sob marker original, sem "closure cross-ref bullet" no novo bucket. Vale mesmo-repo e cross-repo (todos os buckets na janela). Matching via judgment semântico do agente (commit/plan/[[]] cross-refs servem como hint quando matching textual ambíguo); critério conservador — quando incerto, não propor transição.
+
+Mudanças mecânicas: Argumento novo (`--days N`); Step 2 split (2a parse + 2b session context); Step 2.5 novo (coleta backlog reconciliável via regex `^\t- (TODO|DOING|WAITING) ` análoga a `/weekly-review`); Step 3 split (3a rascunho v0.3.0 intacto + 3b fase reconciliação + 3c degeneração + 3d/e exemplos); Step 4 estendido (apresenta rascunho + lista de transições propostas); Step 5 split (5a aplica transições in-place + 5b find-or-create v0.3.0 intacto + 5c caso só-transições); Step 6 reporta transições aplicadas + skipped. 5 novos itens em "## O que NÃO fazer" travando decisões doutrinais.
+
+ADR-001 Sub-decisão 3 ganha § Adendo v0.4.0 (refinamento mecânico per ADR-034: decisão central intacta — skill ainda sintetiza sessão CC no journal de hoje; muda **fluxo de coleta** + **scope de write**).
+
+### Notes
+
+- BACKLOG.md: linha nova em `## Próximos` documentando o refactor + bifurcações decididas via `/triage` 2026-06-12 (temporal scope `--days N`; write modify-in-place sem annotation).
+
 ## 0.4.0 — 2026-06-12
 
 ### Added
