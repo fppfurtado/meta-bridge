@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 — 2026-06-12
+
+### Notes
+
+- registra v0.5.1 em ## Concluídos (refactor editorial /journal-close v0.4.1)
+
 ## 0.5.1 — 2026-06-12
 
 ### Changed
