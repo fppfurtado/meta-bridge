@@ -12,10 +12,10 @@ No build, no tests, no runtime in the plugin itself. The "code" is markdown fron
 
 - `.claude-plugin/plugin.json` — plugin manifest.
 - `.claude-plugin/marketplace.json` — exposes the plugin to `/plugin marketplace add`.
-- `skills/<name>/SKILL.md` — 4 skills (`/journal-note`, `/journal-close`, `/init-logseq-project`, `/weekly-review`).
+- `skills/<name>/SKILL.md` — 5 skills (`/journal-note`, `/journal-close`, `/journal-load`, `/init-logseq-project`, `/weekly-review`).
 - `hooks/hooks.json` — `Stop` event binding for `suggest_journal_close.py`.
 - `hooks/suggest_journal_close.py` — auto-gated Python script (triple gate: marker + `.claude/local/` + Logseq desktop closed).
-- `docs/decisions/ADR-001-skills-de-bridge.md` — mechanical ADR (8 sub-decisions covering skill internals).
+- `docs/decisions/ADR-001-skills-de-bridge.md` — mechanical ADR (9 sub-decisions covering skill internals).
 
 ## Hard runtime assumptions (not configurable)
 
@@ -24,7 +24,7 @@ These paths are hardcoded in skills. Changing them requires patching the skills,
 - `~/Notes/logseq/` — Logseq graph root.
 - `~/Notes/logseq/journals/YYYY_MM_DD.md` — daily journal canonical filename (Logseq's `_` separator + local TZ date — ver ADR-001 § Sub-decisão 1 Adendo v0.2.1).
 - `~/Notes/logseq/pages/<basename>.md` — Project Page canonical naming.
-- `~/Notes/logseq/pages/{session-close,weekly-review,Project Template,daily-journal}.md` — schema templates the skills consume.
+- `~/Notes/logseq/pages/{Project Template,daily-journal}.md` — schema templates the skills consume. (`session-close.md` archived per ADR-001 Sub-decisão 3 § Adendo v0.2.0; `weekly-review.md` archived per Sub-decisão 5 § Adendo v0.2.0 — composição in-skill substituiu consumo de template.)
 - `~/.mrconfig` — `mr` config for cluster lookup in `/init-logseq-project`.
 - `~/Projects/meta-system/REPOS.md` — fallback cluster lookup (the operator's [meta-system](https://github.com/fppfurtado/meta-system) repo via the `~/Projects` symlink).
 
