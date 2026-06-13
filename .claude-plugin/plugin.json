@@ -1,7 +1,7 @@
 {
   "name": "meta-bridge",
   "version": "0.5.2",
-  "description": "Claude Code plugin materializing the bridge between Claude Code sessions and a Logseq cognitive graph. Skills for hashtag-bucket capture, session synthesis with native GTD markers, repo→Project Page sync, and weekly review. Personal-workflow plugin — assumes Logseq at ~/Notes/logseq/.",
+  "description": "Claude Code plugin materializing the bridge between Claude Code sessions and a Logseq cognitive graph. Skills for hashtag-bucket capture, session synthesis with native GTD markers, repo→Project Page sync, and journal review for knowledge garden curation. Personal-workflow plugin — assumes Logseq at ~/Notes/logseq/.",
   "author": {
     "name": "Fernando Furtado",
     "email": "fppfurtado@outlook.com",
