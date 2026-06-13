@@ -16,6 +16,8 @@
 
 ## Concluídos
 
+- 2026-06-13 — Refactor `/weekly-review` v0.2.0 → `/journal-review` v0.3.0 (detective-first com heurísticas estruturais + janela configurável + wizard opt-in). 4 heurísticas MVP (`task-closure-by-context` + `task-zombie` apply; `bucket-underused` + `bucket-emerging` report-only); janela `--days N` default 30 inclusiva `[hoje-N, hoje]` ou `--from/--to` opcional; `--interactive` opt-in pra wizard residual; `--write-summary` opt-in pra bloco no journal de hoje. ADR-001 Sub-decisão 10 nova com cross-ref retroativo a Sub-decisão 5 histórica; rename de skill; drift retroativo `/journal-load` na tabela do README corrigido como side-effect coerente. Commits `aaee0b1` (ADR), `d09fd18` (SKILL rename + reescrita), `dc95e27` (CLAUDE realign), `984b7f3` (descriptions JSONs), `ad36d94` (README realign + drift retroativo); release pendente em sessão dedicada pós-merge.
+
 - 2026-06-12 — Refactor editorial `/journal-close` v0.4.1 (3 refinamentos nos princípios de síntese: granularidade DONE por conceito não commit; filtros de seleção em "Material editorial"; 3 antipadrões em "O que NÃO fazer"; ADR-001 Sub-decisão 3 § Adendo v0.4.1). Commit `894e930`; release [v0.5.1](https://github.com/fppfurtado/meta-bridge/releases/tag/v0.5.1).
 
 - 2026-06-12 — Refactor `/journal-close` v0.4.0 (reconciliação prévia com janela `--days N` + modify-in-place no source pra TODO/WAITING fechados pela sessão; ADR-001 Sub-decisão 3 § Adendo v0.4.0). Commits `cc7f225`, `a693902`; release [v0.5.0](https://github.com/fppfurtado/meta-bridge/releases/tag/v0.5.0).
