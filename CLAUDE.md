@@ -52,11 +52,11 @@ These paths are hardcoded in skills. Changing them requires patching the skills,
 paths:
   version_files: [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json"]
   changelog: CHANGELOG.md
-  plans_dir: null
+  plans_dir: local
 test_command: null
 ```
 
-`plans_dir: null` declarado — plans deste plugin moram em [`meta-system`](https://github.com/fppfurtado/meta-system) (cross-cutting orchestration) ou são ad-hoc.
+`plans_dir: local` declarado em 2026-06-12 a partir do refactor `/weekly-review` → `/journal-review` (modo local per [ADR-047](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-047-modo-local-paths-replicacao-cross-mode.md) do toolkit). Refactors substantivos das skills do bridge moram em `.claude/local/plans/` (gitignored — coerente com filosofia personal-tooling do plugin); planos cross-cutting de orquestração multi-repo continuam morando em [`meta-system`](https://github.com/fppfurtado/meta-system). Combinação `backlog: canonical + plans_dir: local` suportada per ADR-047.
 
 ## Histórico
 
