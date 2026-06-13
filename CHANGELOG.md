@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.6.0 — 2026-06-13
+
+### Added
+
+**`/journal-review` v0.3.0 — sucessor de `/weekly-review` v0.2.0; detective-first com heurísticas estruturais sobre janela configurável.** Refactor profundo demandado em sessão CC `refinamento-journal-close` (2026-06-12): operador relatou nunca ter usado `/weekly-review` (GTD wizard linear, janela 7d hardcoded); demandou knowledge garden curation com janela ampla + heurísticas detectivas + operações estruturais de bucket emergindo do contexto revisado. Decidido via `/triage` + design-reviewer (7 findings absorvidos + 1 cutucada-resolvida); refactor materializado via `/run-plan` em worktree isolada com 4 blocos + 3 blocos extras. PR #1 do repo (primeira PR).
+
+Mecânica nova (per ADR-001 Sub-decisão 10):
+
+- **Janela configurável**: `--days N` default 30 (range `[hoje-N, hoje]` inclusivo — paralelo a `/journal-load` Sub-decisão 9); `--from <date> --to <date>` opcional pra range arbitrário (mensal, trimestral). Substitui hardcode 7d de Sub-decisão 5.
+- **4 heurísticas MVP** com findings de evidência inline: `task-closure-by-context` (apply: TODO/DOING/WAITING X com match contra DONE Y ou narrativa posterior → fecha in-place); `task-zombie` (apply: marker > 14 dias sem progresso → archive/cancel); `bucket-underused` (report-only: bucket em < 2 journals ou < 2 tasks → sugere archive/fund); `bucket-emerging` (report-only: conceito repetido ≥ 3× sem bucket → sugere criar bucket).
+- **Preview-first**: `AskUserQuestion` única (Aplicar tudo / Cherry-pick via Other / Cancelar).
+- **Wizard residual opt-in** via `--interactive` (mesma mecânica de Sub-decisão 5 — keep/next_step/archive/defer).
+- **Apply task-level no MVP**: marker change in-place; mass modify cross-files (heurísticas 3-4) fica como apply manual. Apply estrutural automático com snapshot defensivo reabre em v0.4.0 sob gatilho N≥2 reports.
+- **`--write-summary` opt-in**: bloco no journal de hoje. Default silente — findings deixam trace SSOT in-place.
+
+ADR-001 ganha Sub-decisão 10 (decisão central reformulada per critério ADR-034 do toolkit — Adendo não cabe; rename de skill quebra contract de `name:`); Sub-decisão 5 intacta com cross-ref blockquote no topo apontando 10 como sucessor (histórico v0.1/v0.2 preservado).
+
+### Changed
+
+- **Rename `skills/weekly-review/` → `skills/journal-review/`** via `git mv` preservando history.
+- **`README.md` tabela `## What's inside`**: entry de `/journal-load` adicionada (drift retroativo v0.4.0 — skill existia mas não estava na tabela); entry de `/weekly-review` substituída por `/journal-review` com descrição detective-first; "8 sub-decisions" → "10 sub-decisions".
+- **`CLAUDE.md`**: inventário "5 skills" atualiza `/weekly-review` → `/journal-review`; "9 sub-decisions" → "10 sub-decisions"; bloco config `plans_dir: null` → `local` (modo local per ADR-047 do toolkit; combinação `backlog: canonical + plans_dir: local` suportada).
+- **`plugin.json` + `marketplace.json` descriptions**: rename + descrição rica com 4 heurísticas + opt-in GTD wizard + cross-ref a `/weekly-review` sucessor.
+
+### Notes
+
+- Plano do refactor em modo local (`.claude/local/plans/journal-review-refactor.md`, gitignored). `.worktreeinclude` criado listando `.claude/local/` pra visibilidade do plano em worktrees do `/run-plan`.
+- `BACKLOG.md ## Próximos` ganha 6 entries adiadas com gatilhos: 3 heurísticas v2 (`bucket-co-occurrence`, `bucket-rename-implicit`, `bucket-naming-drift`), apply estrutural automático heurísticas 3-4, drift Sub-decisão 10 ADR DOING ausente em H1/H2/Step 7 (SKILL.md já corrigiu), calibração empírica defaults K/M/T/N (dogfood close revelou ruído pra dataset pessoal).
+- 15 findings absorvidos pré-commit total (7 design-reviewer no /triage + 4 doc-reviewer Bloco 1 ADR + 5 code-reviewer Bloco 2 SKILL + 1 doc-reviewer Bloco 4 JSONs + 1 doc-reviewer bloco extra README).
+- 2 capturas backlog materializadas via `/run-plan §3.5` (drift ADR + calibração thresholds); 1 finding F5 resolvido por modo local em vez de Adendo doutrinal.
+- Primeira PR do repo (#1) — cleanup pós-merge cobriu worktree + branch local + branch remota.
+
 ## 0.5.2 — 2026-06-12
 
 ### Notes
