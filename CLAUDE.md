@@ -12,10 +12,10 @@ No build, no tests, no runtime in the plugin itself. The "code" is markdown fron
 
 - `.claude-plugin/plugin.json` — plugin manifest.
 - `.claude-plugin/marketplace.json` — exposes the plugin to `/plugin marketplace add`.
-- `skills/<name>/SKILL.md` — 5 skills (`/journal-note`, `/journal-close`, `/journal-load`, `/init-logseq-project`, `/weekly-review`).
+- `skills/<name>/SKILL.md` — 5 skills (`/journal-note`, `/journal-close`, `/journal-load`, `/init-logseq-project`, `/journal-review`).
 - `hooks/hooks.json` — `Stop` event binding for `suggest_journal_close.py`.
 - `hooks/suggest_journal_close.py` — auto-gated Python script (triple gate: marker + `.claude/local/` + Logseq desktop closed).
-- `docs/decisions/ADR-001-skills-de-bridge.md` — mechanical ADR (9 sub-decisions covering skill internals).
+- `docs/decisions/ADR-001-skills-de-bridge.md` — mechanical ADR (10 sub-decisions covering skill internals).
 
 ## Hard runtime assumptions (not configurable)
 
