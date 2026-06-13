@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.1 — 2026-06-13
+
+### Notes
+
+**Bootstrap journal fix das skills write.** Drift detectado em 2026-06-13 (Cenário 9 do `## Verificação manual` do refactor `/journal-review`): bootstrap de `/journal-note` + `/journal-close` + `/journal-review` copiava `~/Notes/logseq/pages/daily-journal.md` literal — incluindo property `type:: #template` + wrapper bullets — sem skip nem dedent. Resultado: 3 journals criados pelas skills (`2026_06_10.md`, `2026_06_13.md`, `2026_06_15.md`) ficaram com `type:: #template` literal, indexados pelo Logseq desktop como templates ao invés de journals canonical.
+
+Fix mecânico paralelo a Sub-decisão 4 § Adendo 2026-05-28 (que estabeleceu o pattern pra `/init-logseq-project`): spec das 3 SKILL.md atualizada pra **skipar linhas wrapper** + **dedent 1 tab fixo** no body remanescente. ADR-001 ganha 3 Adendos (Sub-decisão 1 § Adendo v0.2.2 com contexto integral; Sub-decisão 3 § Adendo v0.4.2 e Sub-decisão 10 § Adendo v0.3.1 com cross-ref). Refinamento mecânico per ADR-034 (decisão central intacta — skill ainda bootstrap journal via template; muda como template é consumido). Cleanup retroativo dos 3 journals aplicado em `~/Notes/logseq/journals/` (graph não é git-tracked).
+
+**BACKLOG.md editorial curation** via `/curate-backlog` (5 refinos textuais H2 pós-v0.6.0 — `(a ser criado)` removido das cross-refs Sub-decisão 10; rename `/weekly-review` → `/journal-review` cross-ref histórica do mechanical-skills-scan; sub-comando `mb weekly-review` → `mb journal-review` na entry Tier 1 CLI).
+
 ## 0.6.0 — 2026-06-13
 
 ### Added
