@@ -1,4 +1,4 @@
-# ADR-001: Skills de Bridge — `/journal-note`, `/journal-close`, `/init-logseq-project`, `/weekly-review` + hook `suggest_journal_close`
+# ADR-001: Skills de Bridge — `/journal-note`, `/journal-close`, `/journal-load`, `/journal-review`, `/init-logseq-project` + hook `suggest_journal_close`
 
 **Data:** 2026-05-28
 **Status:** Proposto
@@ -28,7 +28,7 @@ Sem este ADR, mecânica vira convention emergente per-skill (cada uma resolve à
 
 ## Decisão
 
-**Oito sub-decisões mecânicas** que materializam as 4 skills + 1 hook da Bridge.
+**Dez sub-decisões mecânicas** que materializam as 5 skills + 1 hook da Bridge.
 
 ### Sub-decisão 1 — `/journal-note` mechanics
 
@@ -311,6 +311,8 @@ Sem ADR novo: refinamento mecânico de "skill consome template como contract dua
 
 ### Sub-decisão 5 — `/weekly-review` parsing via headings em journals
 
+> **Sucessor (2026-06-13):** [Sub-decisão 10](#sub-decisão-10--journal-review-v030--detective-first-com-heurísticas-estruturais) substitui a decisão central desta Sub-decisão. `/weekly-review` v0.2.0 (GTD wizard linear sobre tasks em janela 7d fixa) → `/journal-review` v0.3.0 (detective-first com 4 heurísticas estruturais sobre janela configurável + wizard residual opt-in). Critério ADR-034 do toolkit falha (decisão central muda + rename de skill quebra contract de `name:` no frontmatter — vs Adendos v0.2.0/v0.3.0/v0.4.0/v0.4.1 de `/journal-close` que preservaram skill identity); Adendo não cabe. Conteúdo desta Sub-decisão 5 fica intacto preservando o histórico v0.1/v0.2.
+
 Skill `skills/weekly-review/SKILL.md`. Frontmatter:
 - `name: weekly-review`
 - `description: Wizard GTD weekly review consumindo headings de daily-journal cross-journals`
@@ -407,7 +409,7 @@ pgrep -xi logseq
 - Retorna pid(s) se existe; retorna não-zero se ausente.
 - Truthy (desktop aberto) → skill recusa com `Logseq desktop aberto — feche antes de executar /<skill>`.
 
-Aplicado a `/journal-note`, `/journal-close`, `/init-logseq-project`, `/weekly-review`.
+Aplicado a `/journal-note`, `/journal-close`, `/init-logseq-project`, `/journal-review`.
 
 Substituir por `pidof`, `ps -A | grep`, ou outras variantes **não aceito**. Razão: portability declarada (Linux/macOS; `pgrep` está em coreutils baseline).
 
@@ -421,7 +423,7 @@ v0.1.0/0.1.1 declararam canonical `pgrep -x logseq` (case-sensitive). Validaçã
 
 Sub-decisão 9 introduz `/journal-load`, primeira skill read-only do plugin — Read integral ou bloco-de-bucket dos journals na janela, sem write no graph. Race window que motivou o gate `pgrep -xi logseq` **não materializa em leitura concorrente**: Logseq desktop aberto não corrompe filesystem da leitura externa; pode haver delta no buffer não-flushed do desktop, mas isso vira "ligeiramente stale", não corruption.
 
-Critério canonical refinado: gate aplica somente onde há side-effect no graph. As 4 skills write (`/journal-note`, `/journal-close`, `/init-logseq-project`, `/weekly-review`) mantêm `pgrep -xi logseq` failure-closed; skills read-only (`/journal-load` agora, futuras read-only) ficam isentas.
+Critério canonical refinado: gate aplica somente onde há side-effect no graph. As 4 skills write (`/journal-note`, `/journal-close`, `/init-logseq-project`, `/journal-review`) mantêm `pgrep -xi logseq` failure-closed; skills read-only (`/journal-load` agora, futuras read-only) ficam isentas.
 
 Trade-off do bypass aceito: leitura com desktop aberto pode mostrar conteúdo ligeiramente stale (último write do operador no desktop ainda não persistiu em disco). Mitigação: operador que precisa garantir freshness fecha o desktop antes de invocar. Default permissivo evita friction no caso comum (consulta rápida ao journal sem reabrir hábitos de fechar Logseq).
 
@@ -438,7 +440,7 @@ Sem ADR novo: refinamento mecânico do critério de aplicação. Decisão centra
 | `/journal-note` | _(roles ausentes — skill não consome papéis canonical)_ |
 | `/journal-close` | _(roles ausentes)_ |
 | `/init-logseq-project` | _(roles ausentes)_ |
-| `/weekly-review` | _(roles ausentes)_ |
+| `/journal-review` | _(roles ausentes)_ |
 | `/journal-load` | _(roles ausentes)_ |
 
 Skills da Bridge **não consomem papéis canonical do toolkit** (Resolution protocol per ADR-003 do toolkit, aplicado vazio). Consomem 2 paths absolutos hardcoded fora do path contract — `~/.mrconfig` e `~/Projects/meta-system/REPOS.md` — plus filesystem do graph (`~/Notes/logseq/`). Mudança desses paths exige adendo neste ADR.
@@ -493,11 +495,94 @@ Passos:
 
 **Cross-skill semantics**: `/journal-load` é independente das 4 skills existentes. Não compartilha probe-de-janela com `/weekly-review` (purpose distinto — load context vs classify GTD); não exige ordem com `/journal-note` (read-only não corrompe writes pendentes); pode ser invocada em qualquer ponto da sessão (default = hoje captura state corrente).
 
+### Sub-decisão 10 — `/journal-review` v0.3.0 — detective-first com heurísticas estruturais
+
+Skill `skills/journal-review/SKILL.md` (sucessor de `/weekly-review` per cross-ref no topo da Sub-decisão 5). Frontmatter:
+- `name: journal-review`
+- `description: Detective-first review com 4 heurísticas estruturais sobre janela configurável de journals; wizard GTD opt-in (sucessor de /weekly-review v0.2.0)`
+- `disable-model-invocation: false`
+
+Materializa demanda emergida na sessão CC `refinamento-journal-close` (2026-06-12): operador relatou nunca ter usado `/weekly-review`; demandou refactor profundo pra knowledge garden curation com janela ampla, heurísticas detectivas e operações estruturais de bucket emergindo do contexto revisado. Decidido via `/triage` 2026-06-12 (decisão central reformulada — critério ADR-034 do toolkit falha; Adendo não cabe).
+
+Há overlap conceitual com `/journal-close` v0.4.1 (ambos fecham TODOs por evidência), mas eixos distintos: `/journal-close` confronta backlog com **session context** (commits da sessão CC corrente — Sub-decisão 3 Adendo v0.4.0); `/journal-review` confronta com **conteúdo da janela inteira de journals** (correlação inter-journal). Complementares, não substitutos.
+
+**Argumentos:**
+
+- `--days N` (opcional, default 30): inteiro N ≥ 0. Janela `[hoje-N, hoje]` inclusiva (N+1 dias). Paralelo doutrinal a `/journal-load` (Sub-decisão 9). Substitui hardcode 7d herdado de Sub-decisão 5.
+- `--from <YYYY-MM-DD> --to <YYYY-MM-DD>` (opcional, mutuamente exclusivos com `--days`): range arbitrário pra revisões mensal-pré-natal, trimestral, etc.
+- `--interactive` (opcional, default off): ativa wizard residual após análise detectiva — tasks abertas que não geraram finding entram em wizard linear estilo Sub-decisão 5 (keep/next_step/archive/defer).
+- `--write-summary` (opcional, default off): escreve bloco `## Journal review — YYYY-MM-DD` no journal de hoje com findings aplicados + decisões cherry-pick. Default off porque curation é meta-operação invisível (findings deixam trace SSOT via marker change in-place; bloco extra seria redundância editorial).
+
+**Passos:**
+
+1. **Gates (cheap-first)**: `pgrep -xi logseq` → truthy: recusa. Skill é write em Heurísticas 1-2 apply + write opcional do summary (per critério Sub-decisão 7 Adendo 2026-06-12: gate aplica onde há side-effect; `/journal-review` write-capable mantém gate). Sem gate git repo — análoga a Sub-decisão 5 Adendo v0.2.0 § Drop gate git repo (opera sobre `~/Notes/logseq/journals/`, não deriva nada do cwd).
+
+2. **Parse args + resolve janela**: `--days N` → range `[hoje-N, hoje]` inclusivo. `--from/--to` → range explícito (validar `from ≤ to`; usar como mutuamente exclusivos com `--days`). Resolver paths dos journals via shell loop análogo a Sub-decisão 9 Step 2; paths ausentes → silent skip.
+
+3. **Coleta cross-journals** (paralelo a `/journal-close` Sub-decisão 3 Adendo v0.4.0 Step 2.5):
+   - Markers `TODO`/`DOING`/`WAITING` top-level (regex `^\t- (TODO|DOING|WAITING) (.*)$`, 1-tab indent restrita — herda de Sub-decisão 5 Adendo v0.2.0).
+   - DONE-tasks recentes (regex `^\t- DONE (.*)$`) como material correlacionável.
+   - Narrativas (frames, insights, mudanças finas, direção emergente) sob mesma indent top-level dos buckets.
+   - Bucket-pai via tree-walk per Sub-decisão 5 e 3 Adendo v0.4.0.
+   - Sub-bullets do task (≥2 tabs) como contexto não-parsed.
+
+4. **Análise detectiva — 4 heurísticas MVP**:
+   - **Heurística 1 `task-closure-by-context` (task-level, apply)**: TODO/WAITING X tem match semântico com DONE Y posterior ou narrativa Z na janela → finding propõe close in-place (marker change → DONE). Matching via judgment semântico do agente; cross-refs explícitos (`commit:`, `plan:`, `[[]]`) são hint forte. Princípio conservador: incerto → não propõe (paralelo a `/journal-close` Sub-decisão 3 Adendo v0.4.0).
+   - **Heurística 2 `task-zombie` (task-level, apply)**: TODO/WAITING aberto > T dias sem progresso correlato (zero DONE relacionado, zero referência em narrativa na janela) → finding propõe archive (DONE) ou cancel (CANCELLED). T default = 14 (calibrável; ajustar via gatilho se sinal real emergir).
+   - **Heurística 3 `bucket-underused` (structural, report-only)**: bucket aparece em < K journals da janela ou tem < M tasks totais → finding emite evidência detalhada ("bucket #X aparece em K'/N journals com M' tasks abertas; considerar archive ou fund com bucket #Y") sem apply automático — operador aplica manualmente via Edit/Write em sessão dedicada. K default = 2, M default = 2.
+   - **Heurística 4 `bucket-emerging` (structural, report-only)**: hashtag/conceito X repetido ≥ N vezes em narrativas (não como bucket top-level) → finding emite evidência ("conceito #X mencionado N' vezes em narrativas dos buckets #A/#B; considerar criar bucket dedicado") sem apply automático. N default = 3.
+
+5. **Apresentação preview-first**: `AskUserQuestion` única ao fim da análise enumera todos os findings agrupados por tipo com evidência inline (source path/linha + contexto que motivou). Opções: `Aplicar tudo` / `Cherry-pick via Other` (operador descreve subset em prosa) / `Cancelar`. Findings report-only (heurísticas 3-4) aparecem como "informativos" — sem apply, só leitura. Zero findings em qualquer heurística → recusa silenciosa.
+
+6. **Wizard residual opt-in (`--interactive`)**: tasks abertas que não geraram finding detectivo (zero matches em heurísticas 1-2) viram input do wizard linear — mesma mecânica de Sub-decisão 5 Adendo v0.2.0 (4 opções keep/next_step/archive/defer; batch de 4 perguntas por chamada). Default off — skill termina após Step 5 sem entrar no wizard.
+
+7. **Apply task-level**: pra cada finding confirmado das heurísticas 1-2, edit cirúrgico no source path — marker change `TODO`/`DOING`/`WAITING` → `DONE` ou `CANCELLED` (paralelo a `/journal-close` Sub-decisão 3 Adendo v0.4.0 Step 5a). Heurísticas 3-4 são report-only — sem apply automatizado no MVP; operador aplica manualmente. Snapshot defensivo é YAGNI no MVP (marker change é single-line atomic, idempotente, reversível via grep + sed manual; canal de falha é matching errado, capturado no preview-first com evidência inline). Apply estrutural automático reabre em v0.4.0 sob gatilho.
+
+8. **`--write-summary` opcional**: flag ativa escreve bloco `## Journal review — YYYY-MM-DD` no journal de hoje (após bucket existente ou no fim) com findings aplicados + decisões cherry-pick. Default off.
+
+9. **Reportar**: path(s) tocado(s); findings emitidos por heurística; findings aplicados vs report-only vs rejeitados; transições aplicadas (heurísticas 1-2) com source path/linha.
+
+**Asymmetry de write retroativo da Heurística 1 vs `/journal-close` v0.4.0**: `/journal-close` v0.4.0 (Sub-decisão 3 Adendo v0.4.0) escreve só no journal de hoje + reconciliação retroativa gated por session context (commits da sessão CC corrente). `/journal-review` v0.3.0 Heurística 1 escreve marker change retroativo em journal histórico (até N dias atrás) baseado em matching textual cross-journal. Asymmetry intencional porque (i) marker change é single-line atomic e idempotente — re-aplicar = no-op; (ii) preview-first com evidência inline é o gate real — operador inspeciona match antes do apply; (iii) snapshot defensivo seria YAGNI: canal de falha é matching errado, capturado no preview. SSOT in-place per ADR-002 Sub-decisão 4 do logseq-notes preservado.
+
+**Interaction matrix com `/journal-close` v0.4.1**: ambas skills usam SSOT in-place via marker change → idempotência natural. Cenários:
+
+- `/journal-review` apresenta finding "fechar X", operador rejeita; `/journal-close` corrente pode fechar X via session context (evidência forte > matching textual cross-journal).
+- `/journal-review --days N` aplica fechamento em journal de N dias atrás; `/journal-close --days N` posterior vê marker já DONE durante coleta Step 2.5 → no-op natural.
+- Conflito de evidência ambígua: invariante de tie-breaking documentada — "session context > matching textual cross-journal" como heurística semântica (operador tem palavra final via Other no preview).
+
+**Pré-condições herdadas:**
+
+- `pgrep -xi logseq` gate (Sub-decisão 7) — failure-closed; skill é write.
+- Regex top-level restrita a 1-tab indent (Sub-decisão 5 Adendo v0.2.0; same em `/journal-close` Sub-decisão 3 Adendo v0.4.0).
+- Markers `DONE`/`CANCELLED` terminais — não capturados como reconciliáveis (ADR-002 Sub-decisão 4 do logseq-notes).
+- Local TZ (Sub-decisão 1 Adendo v0.2.1).
+- Find-or-create de bucket idempotente cross-skill com `/journal-note` (contract ADR-006 § Decisão § 1) — só relevante em `--write-summary` que escreve no journal de hoje.
+
+**Falsos-positivos heading-style** (ex.: `WAITING Próximos passos` capturado pela regex mas é heading textual): pattern reconhecido em fechamento `/journal-close` de 2026-06-12. Judgment do agente deve filtrar antes de emitir finding. Gatilho de revisão: N ≥ 2 reports adicionais → adicionar regra de blacklist textual no Step 4.
+
+**Cross-refs:**
+
+- Sub-decisão 5 (predecessor v0.1/v0.2 — `/weekly-review`; histórico intacto com cross-ref de sucessor no topo).
+- Sub-decisão 3 Adendos v0.3.0/v0.4.0/v0.4.1 (`/journal-close` — paralelo de reconciliação prévia + princípios editoriais detective).
+- Sub-decisão 9 (`/journal-load` — paralelo de janela `--days N`).
+- ADR-006 do meta-system (hashtag-buckets).
+- ADR-002 do logseq-notes (SSOT in-place de markers).
+- ADR-034 do toolkit (critério Adendo vs Sub-decisão nova — invocado pra justificar Sub-decisão 10 nova vs Adendo a 5).
+- ADR-047 do toolkit (modo local de `plans_dir` — usado pra plano deste refactor em `.claude/local/plans/journal-review-refactor.md`).
+
+**Gatilhos de revisão futuros** (paralelos aos gerais da § Gatilhos de revisão deste ADR):
+
+- **Apply estrutural automático heurísticas 3-4**: N ≥ 2 reports manuais do operador de findings report-only que mereceriam apply automático → reabrir como v0.4.0 com snapshot defensivo per-finding-type (snapshot path canonical fora do graph — XDG cache).
+- **Heurística `bucket-co-occurrence`**: N ≥ 2 reports manuais de buckets coocorrentes sem fusão proposta.
+- **Heurística `bucket-rename-implicit`**: N ≥ 2 incidentes de bucket sumir/renomear sem propagation.
+- **Heurística `bucket-naming-drift`**: N ≥ 2 reports de variantes do mesmo bucket coexistindo.
+- **Wizard residual `--interactive` precisa virar default**: ≥ 2 reports de findings detectivos zero-cover em janelas grandes → flag muda pra opt-out (`--no-interactive`).
+
 ## Consequências
 
 ### Benefícios
 
-- **8 sub-decisões cobrem 100% da mecânica das 4 skills + hook** — execução fica tradução literal.
+- **10 sub-decisões cobrem 100% da mecânica das 5 skills + hook** — execução fica tradução literal.
 - **Critérios "prop mecânica vs humana", "stop event + marker", "exclusão de hoje da janela" são exhaustivos** — sem decisões emergentes que diluem invariantes.
 - **Marker é contract público do toolkit** — qualquer plugin author pode reagir ao fim de `/run-plan` sem fork.
 - **Frontmatter roles vazio é honesto**: skills não inventam dependências em papéis.
@@ -561,7 +646,7 @@ Skills com `--pkm <type>` flag e backend per-PKM.
 
 1. **Marker canonical `[PRAGMATIC: plan-done]` colide com outro plugin** ou toolkit muda formato: revisar Sub-decisão 6.
 2. **Stop event API muda** (Claude Code release breaks compat): refazer probe.
-3. **`/weekly-review` truncate ou janela 7d ficam restritivos**: ≥2 invocações truncam com >30 itens em 4 semanas → parametrizar via flags.
+3. **`/weekly-review` truncate ou janela 7d ficam restritivos**: ≥2 invocações truncam com >30 itens em 4 semanas → parametrizar via flags. *Resolvido empírico (2026-06-13)*: refactor profundo `/weekly-review` → `/journal-review` v0.3.0 materializou parametrização (`--days N` default 30 + `--from/--to`) + shift detective-first per Sub-decisão 10.
 4. **AskUserQuestion cardinality 4 fica gargalo**: ≥3 chamadas seriadas em ≥2 invocações → negociar com toolkit core.
 5. **Probe `pgrep -xi logseq` falha em ambiente do operador**: adicionar fallback `ps -A | grep -c logseq`. (Atualizado v0.1.2: gatilho original disparou parcialmente — case-sensitive `-x` quebrou em AppImage `Logseq` capital-L; resolvido via `-xi`. Reabre se `pgrep -xi` falhar por outro motivo.)
 6. **`/init-logseq-project` idempotência quebra** (operador reporta perda de dado em ≥1 incidente): revisar critério "prop mecânica".
@@ -578,7 +663,7 @@ Skills com `--pkm <type>` flag e backend per-PKM.
 Materialização em Sessão 5 da Onda 4 do meta-sistema (2026-05-28), commit inicial deste plugin contendo:
 
 - ADR-001 (este).
-- 4 skills com SKILL.md em `skills/{journal-note,journal-close,init-logseq-project,weekly-review}/`.
+- 4 skills com SKILL.md em `skills/{journal-note,journal-close,init-logseq-project,weekly-review}/` (`/journal-load` adicionada em 2026-06-12 v0.4.0 per Sub-decisão 9; `/weekly-review` renomeada pra `/journal-review` em 2026-06-13 v0.3.0 da skill per Sub-decisão 10).
 - Hook `hooks/suggest_journal_close.py` + binding `Stop` em `hooks/hooks.json`.
 - Manifestos `.claude-plugin/{plugin.json,marketplace.json}` versão 0.1.0.
 - README.md + CLAUDE.md + LICENSE + .gitignore.
