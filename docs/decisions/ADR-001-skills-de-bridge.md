@@ -96,6 +96,22 @@ Filename do journal (`$(date -u +%Y_%m_%d)`) migrado pra **local TZ** (`$(date +
 
 Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta; sem categoria nova; sem restrição externa nova; refinamento mecânico justificado por convergência cross-plugin documentada.
 
+#### Adendo v0.2.2 (2026-06-13) — bootstrap journal: skip wrapper + dedent 1 tab
+
+Materializa fix mecânico de bootstrap detectado em 2026-06-13 (sessão `journal-review-refactor + release v0.6.0`, Cenário 9 do `## Verificação manual` do refactor `/journal-review`). Bootstrap journal das skills `/journal-note` + `/journal-close` + `/journal-review` (`/weekly-review` v0.2.0 também afetada historicamente) copiava `~/Notes/logseq/pages/daily-journal.md` literal — incluindo property `type:: #template` + wrapper bullets (`- template:: daily-journal` + `template-including-parent:: false`) que NÃO deveriam estar no journal real. Resultado: 3 journals criados pelas skills (`2026_06_10.md`, `2026_06_13.md`, `2026_06_15.md`) ficaram com property `type:: #template` literal — Logseq desktop os indexa como template, não como journal canonical.
+
+Fix em v0.2.2 (refinamento mecânico — decisão central intacta; skill ainda bootstrap journal via template):
+
+- Step 3 do SKILL.md atualizado: spec antiga "copiar conteúdo (após linha de `template-including-parent:: false`)" → spec nova **skipar linhas wrapper** (`type:: #template`, `- template:: daily-journal`, `template-including-parent:: false`) + **dedent 1 tab fixo** no body remanescente. Paralelo explícito a Sub-decisão 4 § Adendo 2026-05-28 que estabeleceu o pattern análogo pra `/init-logseq-project` consumindo `Project Template.md`.
+- **Resultado pro template atual** (scaffold mínimo `	- `): journal real começa com `- ` (bullet vazio top-level). Sem property `type:: #template`; sem wrapper.
+- **Cleanup retroativo dos 3 journals afetados** aplicado na mesma sessão (remoção das linhas 1-4 do wrapper).
+
+Sem ADR novo: refinamento mecânico (decisão central de "skill bootstrap journal via template" intacta; muda **como** template é consumido). Paralelo + cross-ref explícito a Sub-decisão 4 § Adendo 2026-05-28 que solucionou o mesmo problema em outra skill.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério (todos 4 satisfeitos: decisão central intacta; sem categoria nova; sem restrição externa; caráter explicativo + refinamento).
+
+**Cross-refs:** Sub-decisão 3 § Adendo v0.4.2 (mesmo fix em `/journal-close`); Sub-decisão 10 § Adendo v0.3.1 (mesmo fix em `/journal-review`); Sub-decisão 4 § Adendo 2026-05-28 (pattern doutrinal análogo pra `/init-logseq-project`).
+
 ### Sub-decisão 2 — Template insertion: literal append
 
 Skills da Bridge que consomem templates do graph (`session-close.md`, `weekly-review.md`) **lêem o `.md` como filesystem markdown**, parseiam placeholders (regex `<([a-z][a-z0-9-]+)>`), substituem com valores resolvidos, e fazem **append literal** no journal/page destino.
@@ -254,6 +270,18 @@ Pré-condições v0.4.1 herdadas intactas: todos os gates e mecânicas de v0.4.0
 - Diagnóstico empírico: comparação manual do operador entre `~/Notes/logseq/journals/2026_06_11.md` linha 11+ (referência satisfatória) e `~/Notes/logseq/journals/2026_06_12.md` linha 1+ (regressão pós-v0.4.0).
 
 Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (skill `/journal-close` sintetiza sessão CC no journal de hoje); sem categoria nova; sem restrição externa nova; caráter explicativo + refinamento (princípios editoriais que governam o output, não mecânica de coleta ou write).
+
+#### Adendo v0.4.2 (2026-06-13) — bootstrap journal: skip wrapper + dedent 1 tab
+
+Materializa mesmo fix mecânico de bootstrap do Adendo v0.2.2 da Sub-decisão 1 (detectado em 2026-06-13; ver contexto integral + lista de journals afetados lá). Bootstrap journal de `/journal-close` Step 5b copiava `~/Notes/logseq/pages/daily-journal.md` literal — incluindo property `type:: #template` + wrapper bullets — sem skip nem dedent.
+
+Fix em v0.4.2 (refinamento mecânico — decisão central intacta):
+
+- Step 5b § Bootstrap journal atualizado: spec antiga "ler ... como template body (scaffold mínimo pós-Onda 4.5)" → spec nova **skipar linhas wrapper** + **dedent 1 tab fixo** no body remanescente. Paralelo explícito a Sub-decisão 4 § Adendo 2026-05-28.
+
+Sem ADR novo. Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério.
+
+**Cross-refs:** Sub-decisão 1 § Adendo v0.2.2 (contexto integral + lista de journals afetados); Sub-decisão 10 § Adendo v0.3.1 (mesmo fix em `/journal-review`); Sub-decisão 4 § Adendo 2026-05-28 (pattern doutrinal análogo).
 
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
@@ -577,6 +605,18 @@ Há overlap conceitual com `/journal-close` v0.4.1 (ambos fecham TODOs por evid�
 - **Heurística `bucket-rename-implicit`**: N ≥ 2 incidentes de bucket sumir/renomear sem propagation.
 - **Heurística `bucket-naming-drift`**: N ≥ 2 reports de variantes do mesmo bucket coexistindo.
 - **Wizard residual `--interactive` precisa virar default**: ≥ 2 reports de findings detectivos zero-cover em janelas grandes → flag muda pra opt-out (`--no-interactive`).
+
+#### Adendo v0.3.1 (2026-06-13) — bootstrap journal: skip wrapper + dedent 1 tab
+
+Materializa mesmo fix mecânico de bootstrap do Adendo v0.2.2 da Sub-decisão 1 (detectado em 2026-06-13; ver contexto integral + lista de journals afetados lá). Bootstrap journal de `/journal-review` Step 8 (`--write-summary`) copiava template via "scaffold (paralelo a `/journal-close`)" — herdando o mesmo drift do `/journal-close` pré-fix.
+
+Fix em v0.3.1 (refinamento mecânico — decisão central intacta):
+
+- Step 8 § Bootstrap journal atualizado: spec antiga "ler ... como scaffold (paralelo a `/journal-close`)" → spec nova **skipar linhas wrapper** + **dedent 1 tab fixo** no body remanescente. Paralelo explícito a `/journal-close` Sub-decisão 3 § Adendo v0.4.2 e Sub-decisão 4 § Adendo 2026-05-28.
+
+Sem ADR novo. Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério.
+
+**Cross-refs:** Sub-decisão 1 § Adendo v0.2.2 (contexto integral + lista de journals afetados); Sub-decisão 3 § Adendo v0.4.2 (fix em `/journal-close`); Sub-decisão 4 § Adendo 2026-05-28 (pattern doutrinal análogo).
 
 ## Consequências
 

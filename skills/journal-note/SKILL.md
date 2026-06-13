@@ -52,7 +52,7 @@ Convention de naming definida em [ADR-002 do logseq-notes Sub-decisão 3](https:
 ### 3. Resolver journal path + bootstrap se ausente
 
 - **Journal path**: `~/Notes/logseq/journals/$(date +%Y_%m_%d).md` (Logseq canonical filename com separator `_`, local TZ).
-- Journal path **não existe** → ler `~/Notes/logseq/pages/daily-journal.md` como template body; copiar conteúdo (após linha de `template-including-parent:: false`) pro journal path. Template ausente (logseq-notes não setup) → criar arquivo vazio.
+- Journal path **não existe** → ler `~/Notes/logseq/pages/daily-journal.md` como template body; **skipar linhas wrapper** (`type:: #template`, `- template:: daily-journal`, `template-including-parent:: false`) + **dedent 1 tab fixo** no body remanescente (paralelo a Sub-decisão 4 § Adendo 2026-05-28 do ADR-001 que estabeleceu o pattern pra `/init-logseq-project`). Resultado pro template atual (scaffold mínimo `	- `): journal real começa com `- ` (bullet vazio top-level). Template ausente (logseq-notes não setup) → criar arquivo vazio.
 
 Template pós-Onda 4.5 é scaffold mínimo (1 bullet vazio) per ADR-002 Sub-decisão 1; não há headings GTD fixos.
 

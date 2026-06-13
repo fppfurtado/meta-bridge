@@ -246,7 +246,7 @@ Para cada bucket `- #<repo>` do rascunho confirmado:
 
 **Idempotência cross-skill com `/journal-note`**: contract crítico mantido per ADR-006 § Decisão § 1 — bucket compartilhado entre skills não duplica.
 
-**Bootstrap journal**: journal de hoje ausente → ler `~/Notes/logseq/pages/daily-journal.md` como template body (scaffold mínimo pós-Onda 4.5).
+**Bootstrap journal**: journal de hoje ausente → ler `~/Notes/logseq/pages/daily-journal.md` como template body; **skipar linhas wrapper** (`type:: #template`, `- template:: daily-journal`, `template-including-parent:: false`) + **dedent 1 tab fixo** no body remanescente (paralelo a Sub-decisão 4 § Adendo 2026-05-28 do ADR-001). Scaffold mínimo pós-Onda 4.5 (template body = `	- `; pós-skip+dedent vira `- `).
 
 #### 5c. Caso rascunho vazio + reconciliação não-vazia
 

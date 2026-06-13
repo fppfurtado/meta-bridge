@@ -254,7 +254,7 @@ Pra cada finding confirmado das heurísticas 1-2 (Step 5), edit cirúrgico no so
 	- Wizard residual (--interactive): <N tasks classificadas> (se --interactive ativo)
 ```
 
-Append no journal de hoje (find-or-create bloco `## Journal review — YYYY-MM-DD` — se já existe, append children; senão, append novo bloco top-level no fim). Bootstrap journal: ausente → ler `~/Notes/logseq/pages/daily-journal.md` como scaffold (paralelo a `/journal-close`).
+Append no journal de hoje (find-or-create bloco `## Journal review — YYYY-MM-DD` — se já existe, append children; senão, append novo bloco top-level no fim). Bootstrap journal: ausente → ler `~/Notes/logseq/pages/daily-journal.md` como template body; **skipar linhas wrapper** (`type:: #template`, `- template:: daily-journal`, `template-including-parent:: false`) + **dedent 1 tab fixo** no body remanescente (paralelo a `/journal-close` Sub-decisão 3 § Adendo v0.4.2 e Sub-decisão 4 § Adendo 2026-05-28 do ADR-001).
 
 `--write-summary` ausente → skip; skill termina após apply.
 
