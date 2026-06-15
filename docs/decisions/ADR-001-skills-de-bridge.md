@@ -63,9 +63,9 @@ Materializa [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/b
 Refinamentos do diff v0.1.x → v0.2.0 (lista descritiva, não mapeamento 1:1 com Steps da v0.2.0):
 
 - **Step "gate git repo" removido**: cwd fora de git agora cai em prompt enum — domínios não-repo (`#thought`, `#draft`, `#idea`, ad-hoc via Other) são cidadões legítimos per ADR-006 § Decisão § 1.
-- **Derivação de domínio**: probe ordenado novo (cwd git repo → basename; senão → AskUserQuestion enum com sanitização kebab-case lowercase no caminho Other per ADR-002 Sub-decisão 3 — mitigação direta do risco de hashtag proliferation citado em ADR-006 § Limitações).
+- **Derivação de domínio**: probe ordenado novo (cwd git repo → basename; senão → AskUserQuestion enum com sanitização kebab-case lowercase no caminho Other per [`logseq-notes` ADR-002](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) Sub-decisão 3 — mitigação direta do risco de hashtag proliferation citado em ADR-006 § Limitações).
 - **Find-or-create bucket top-level `- #<domínio>`**: substitui o append flat de v0.1.x. Probe regex `^- #<domínio>($| )` restringe a top-level. Idempotente: mesma tag no mesmo dia reusa o bucket existente.
-- **Format do child**: input com marker prefix uppercase (`TODO `/`DOING `/`WAITING `/`DONE `/`CANCELLED `) preserva como marker do bloco Logseq nativo per ADR-002 Sub-decisão 4; senão child plain.
+- **Format do child**: input com marker prefix uppercase (`TODO `/`DOING `/`WAITING `/`DONE `/`CANCELLED `) preserva como marker do bloco Logseq nativo per [`logseq-notes` ADR-002](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) Sub-decisão 4; senão child plain.
 - **Sub-bullets mecânicos**: scan limitado por 2 patterns (`commit:<hash>`, `plan:<slug>`) extraídos como nested sub-bullets sem destruir inline reference no body. `[[<page>]]` cross-refs ficam inline. Resto do input é prosa livre per ADR-006 § Decisão § 3.
 - **Timestamp UTC removido do bloco**: v0.1.x prepended timestamp ao bloco top-level. Pós-retrofit, top-level é tag (bucket); timestamp por capture vira ruído e duplica metadata do filename do journal.
 - **Template ausente warning**: comportamento mantido (bootstrap journal vazio se template ausente). Sem mudança.
@@ -111,6 +111,16 @@ Sem ADR novo: refinamento mecânico (decisão central de "skill bootstrap journa
 Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério (todos 4 satisfeitos: decisão central intacta; sem categoria nova; sem restrição externa; caráter explicativo + refinamento).
 
 **Cross-refs:** Sub-decisão 3 § Adendo v0.4.2 (mesmo fix em `/journal-close`); Sub-decisão 10 § Adendo v0.3.1 (mesmo fix em `/journal-review`); Sub-decisão 4 § Adendo 2026-05-28 (pattern doutrinal análogo pra `/init-logseq-project`).
+
+#### Adendo (2026-06-15) — CLI thin orchestrator
+
+Substância de write da skill `/journal-note` (find-or-create bucket, bootstrap journal via template, sub-bullets mecânicos `commit:`/`plan:`, sanitização kebab-case + NFD-strip de acentos PT-BR, gate `pgrep -xi logseq`) migra para `meta_bridge.journal_note` (CLI `mb journal-note`).
+
+SKILL.md preserva: frontmatter, `## Argumentos`, scope guards narrativos (`## O que NÃO fazer`), e a heurística de derivação `<domain>` via git toplevel + `AskUserQuestion` fallback (decisão semântica que requer harness CC). Passos do thin orchestrator: derivar `--domain` → `Bash mb journal-note --domain "<X>" "<content>"` → reportar output.
+
+Decisão central da Sub-decisão 1 ("skill escreve no journal de hoje + bucket idempotente") intacta — refinamento mecânico cascateando materialização CLI registrada em ADR-002 (cross-ref aqui). Adendo per ADR-034 do toolkit critério: decisão central intacta; sem categoria nova; sem restrição externa; refinamento.
+
+**Cross-refs:** [`ADR-002`](ADR-002-materializacao-cli-mb.md) § Decisão 2 — Cascateamento (decisão duradoura nova); [`meta-system` ADR-016](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-016-target-aware-packaging-mecanico-substitui-mcp-first.md) (critério target-aware aplicado upstream).
 
 ### Sub-decisão 2 — Template insertion: literal append
 
@@ -283,6 +293,18 @@ Sem ADR novo. Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/f
 
 **Cross-refs:** Sub-decisão 1 § Adendo v0.2.2 (contexto integral + lista de journals afetados); Sub-decisão 10 § Adendo v0.3.1 (mesmo fix em `/journal-review`); Sub-decisão 4 § Adendo 2026-05-28 (pattern doutrinal análogo).
 
+#### Adendo (2026-06-15) — CLI thin orchestrator
+
+Substância de write da skill `/journal-close` (find-or-create bucket, dedup por commit hash, modify-in-place atomic das transições, bootstrap journal, gate Logseq) migra para `meta_bridge.journal_close` (CLI `mb journal-close` consumindo payload markdown via stdin com `## Append` + `## Transitions`).
+
+SKILL.md preserva integralmente a substância **heurístico-semântica** (Adendos v0.3.0/v0.4.0/v0.4.1 inalterados): matching semântico TODO ↔ DONE, princípios editoriais de síntese humano-amigável (granularidade DONE por conceito, filtros "isto vai informar futuras decisões?", 3 antipadrões editoriais, brevidade vence completude), composição in-skill do payload. Passos do thin orchestrator: coletar session context → sintetizar rascunho → matching semântico → `AskUserQuestion` com dispatch — `Confirma | Edita | Sem substância` → pipe payload pra `mb journal-close`.
+
+Decisão F3 design-reviewer absorvida no `/triage` (2026-06-15): matching semântico fica na skill MD; CLI vira write engine determinístico recebendo transições já decididas.
+
+Decisão central da Sub-decisão 3 ("skill compõe síntese humano-amigável + reconciliação prévia in-place") intacta — refinamento mecânico cascateando materialização CLI registrada em ADR-002 (cross-ref aqui). Adendo per ADR-034 critério: decisão central intacta; sem categoria nova; sem restrição externa; refinamento.
+
+**Cross-refs:** [`ADR-002`](ADR-002-materializacao-cli-mb.md) § Decisão 3 — Divisão CLI/skill por F3/F2; Sub-decisão 1 § Adendo (2026-06-15) (mesmo cascateamento em `/journal-note`); Sub-decisão 4 § Adendo (2026-06-15) (mesmo em `/init-logseq-project`); Sub-decisão 10 § Adendo (2026-06-15) (mesmo em `/journal-review`).
+
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
 Skill `skills/init-logseq-project/SKILL.md`. Frontmatter:
@@ -337,6 +359,18 @@ Fix em v0.1.4 (refinamento mecânico — decisão central intacta):
 
 Sem ADR novo: refinamento mecânico de "skill consome template como contract dual-papel (schema declarativo pra skill + insertion visual via desktop)" decidida em Sub-decisão 2. Linha 123 atualizada com sumário; mecânica concreta no SKILL.md Step 5.
 
+#### Adendo (2026-06-15) — CLI thin orchestrator
+
+Substância de write da skill `/init-logseq-project` (lookups `~/.mrconfig` + `~/Projects/meta-system/REPOS.md`, bootstrap via Project Template, dedent + macro substitution, props mecânicas idempotentes, preservação de props humanas, gate Logseq) migra para `meta_bridge.init_project` (CLI `mb init-project`).
+
+SKILL.md preserva: frontmatter, `## O que NÃO fazer`, e o **fallback de cluster prompt** via `AskUserQuestion` enum 9-cluster (per `meta-system` ADR-003) — decisão semântica que requer harness CC. CLI faz lookups primeiro; skill prompt dispara só quando ambos lookups falham e `--cluster` não foi passado.
+
+Decisão F1 design-reviewer absorvida no `/triage` (2026-06-15): skill orquestra cluster prompt enum; CLI exige `--cluster` quando lookups falham. Implementação **relaxa** F1 — CLI tenta lookups primeiro (caminho-comum resolve sem skill intervir). Nota registrada em ADR-002 § Decisão 4.
+
+Decisão central da Sub-decisão 4 ("4 props mecânicas exhaustivo + preservação de props humanas + probe ordenado de cluster") intacta — refinamento mecânico cascateando materialização CLI. Adendo per ADR-034 critério: decisão central intacta; sem categoria nova; sem restrição externa; refinamento.
+
+**Cross-refs:** [`ADR-002`](ADR-002-materializacao-cli-mb.md) § Decisão 4 — `mb init-project` cluster resolution; Sub-decisões 1/3/10 § Adendos (2026-06-15) (mesmo cascateamento nas demais skills).
+
 ### Sub-decisão 5 — `/weekly-review` parsing via headings em journals
 
 > **Sucessor (2026-06-13):** [Sub-decisão 10](#sub-decisão-10--journal-review-v030--detective-first-com-heurísticas-estruturais) substitui a decisão central desta Sub-decisão. `/weekly-review` v0.2.0 (GTD wizard linear sobre tasks em janela 7d fixa) → `/journal-review` v0.3.0 (detective-first com 4 heurísticas estruturais sobre janela configurável + wizard residual opt-in). Critério ADR-034 do toolkit falha (decisão central muda + rename de skill quebra contract de `name:` no frontmatter — vs Adendos v0.2.0/v0.3.0/v0.4.0/v0.4.1 de `/journal-close` que preservaram skill identity); Adendo não cabe. Conteúdo desta Sub-decisão 5 fica intacto preservando o histórico v0.1/v0.2.
@@ -365,12 +399,12 @@ Materializa [ADR-006 do meta-system](https://github.com/fppfurtado/meta-system/b
 
 Refinamentos do diff v0.1.x → v0.2.0:
 
-- **Coleta via grep de markers nativos**: substitui parsing de headings `## Inbox`/`## Doing`/`## Waiting` (que saíram do daily-journal template per ADR-002 Sub-decisão 1) por grep de markers Logseq nativos `TODO`/`DOING`/`WAITING` em journals. ADR-002 Sub-decisão 4 estabelece markers nativos como SSOT de estado GTD; Sub-decisão 5 aqui adapta consumer.
+- **Coleta via grep de markers nativos**: substitui parsing de headings `## Inbox`/`## Doing`/`## Waiting` (que saíram do daily-journal template per [`logseq-notes` ADR-002](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) Sub-decisão 1) por grep de markers Logseq nativos `TODO`/`DOING`/`WAITING` em journals. `logseq-notes` ADR-002 Sub-decisão 4 estabelece markers nativos como SSOT de estado GTD; Sub-decisão 5 aqui adapta consumer.
 - **Regex restrita a top-level** (1-tab indent, filhas diretas de bucket `- #<domínio>`): `^\t- (TODO|DOING|WAITING) (.*)$` per F1 do /triage do plano `onda-4-5-journal-retrofit-gtd`. Markers em sub-bullets (≥2 tabs) ficam como prosa contextual per ADR-006 § Decisão § 3 mental model (sub-bullets = prosa não-parsed).
-- **Markers `DONE` e `CANCELLED` não capturados**: terminais por design (per ADR-002 Sub-decisão 4) — não entram no backlog do wizard. Audit retrospectivo via leitura direta do journal.
+- **Markers `DONE` e `CANCELLED` não capturados**: terminais por design (per [`logseq-notes` ADR-002](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) Sub-decisão 4) — não entram no backlog do wizard. Audit retrospectivo via leitura direta do journal.
 - **Sub-bullets do task apresentados como contexto não-parsed** (per ADR-006 § Decisão § 3 contract): wizard mostra sub-bullets pro operador classificar mas NÃO infere taxonomia por prefixo. Apresentação como prosa em prelúdio à AskUserQuestion.
 - **Bucket de origem preservado em decisão `defer`**: task move pra journal de destino sob `- #<domínio>` mesmo do source. Find-or-create do bucket no destino paralelo a `/journal-note` Step 4.
-- **Archive via mudança de marker (não property)**: decisão `archive` muda marker do task no source de `TODO`/`DOING`/`WAITING` pra terminal escolhido (`DONE` ou `CANCELLED`). Substitui adicção de property `archived:: true` da v0.1.x. Razão: per ADR-002 Sub-decisão 4, markers são SSOT; property `archived::` é pra page-level (ADR-001 deste logseq-notes Sub-decisão 7), não block-level.
+- **Archive via mudança de marker (não property)**: decisão `archive` muda marker do task no source de `TODO`/`DOING`/`WAITING` pra terminal escolhido (`DONE` ou `CANCELLED`). Substitui adicção de property `archived:: true` da v0.1.x. Razão: per [`logseq-notes` ADR-002](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) Sub-decisão 4, markers são SSOT; property `archived::` é pra page-level (`logseq-notes` ADR-001 Sub-decisão 7), não block-level.
 - **Composição in-skill**: drop consumption de `pages/weekly-review.md` template. Compose direto no Step 4 (paralelo a `/journal-close` v0.2.0). Template `pages/weekly-review.md` deixa de ser consumer da skill — destino do arquivo no graph fica a critério do operador do logseq-notes (fora do escopo deste ADR).
 - **Wizard pacing pós-retrofit**: iteração global cross-marker (M = total geral, não per-marker), batch de 4 perguntas por chamada `AskUserQuestion`. Truncate max 20 por marker (60 total potencial) → até 15 chamadas seriadas no pior caso. Substitui o cálculo "5 chamadas × batch de 4" da v0.1.x (que era per-categoria).
 - **Drop gate git repo**: v0.1.x exigia git repo no cwd (sem razão funcional — skill opera sobre `~/Notes/logseq/journals/`). v0.2.0 dropa o gate; pgrep continua canonical.
@@ -617,6 +651,18 @@ Fix em v0.3.1 (refinamento mecânico — decisão central intacta):
 Sem ADR novo. Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério.
 
 **Cross-refs:** Sub-decisão 1 § Adendo v0.2.2 (contexto integral + lista de journals afetados); Sub-decisão 3 § Adendo v0.4.2 (fix em `/journal-close`); Sub-decisão 4 § Adendo 2026-05-28 (pattern doutrinal análogo).
+
+#### Adendo (2026-06-15) — CLI thin orchestrator
+
+Substância de scan + apply da skill `/journal-review` (regex top-level cross-journals para markers ativos + DONE-tasks + narrativas + inventário de buckets; modify-in-place atomic; bootstrap journal; gate Logseq) migra para `meta_bridge.journal_review` (CLI `mb journal-review` em dois modos: scan default + `--apply` via stdin transitions).
+
+SKILL.md preserva integralmente: as **4 heurísticas detectivas** (`task-closure-by-context`, `task-zombie`, `bucket-underused`, `bucket-emerging`) com critérios semânticos de match e thresholds (K/M/T/N defaults); o `AskUserQuestion` preview-first com dispatch por opção; o wizard residual `--interactive`; a composição do payload para `--apply` traduzindo cherry-pick. Passos do thin orchestrator: `Bash mb journal-review --days N` → análise detectiva via heurísticas → `AskUserQuestion` → traduzir seleção em transições concretas → `Bash mb journal-review --apply` com payload.
+
+Decisão F2 design-reviewer absorvida no `/triage` (2026-06-15): CLI emite scan em markdown estruturado (Active markers / DONE tasks / Narratives / Bucket inventory) em ordem cronológica ascendente; skill retém findings em conversation memory entre invocações; re-invoca CLI passando paths/linhas/transições concretas (**não IDs opacos**).
+
+Decisão central da Sub-decisão 10 ("detective-first com 4 heurísticas estruturais sobre janela configurável + wizard residual opt-in") intacta — refinamento mecânico cascateando materialização CLI. Adendo per ADR-034 critério: decisão central intacta; sem categoria nova; sem restrição externa; refinamento.
+
+**Cross-refs:** [`ADR-002`](ADR-002-materializacao-cli-mb.md) § Decisão 3 — Divisão CLI/skill por F3/F2; Sub-decisões 1/3/4 § Adendos (2026-06-15) (mesmo cascateamento nas demais skills).
 
 ## Consequências
 

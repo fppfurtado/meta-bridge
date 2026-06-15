@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+**Materialização CLI `mb` substituindo Tier 1 MCP candidato implícito.** Pacote Python `meta_bridge` (Click) com entry-point `mb` instalável via `pipx install -e .`. 4 subcomandos cobrem o write substantivo das 4 skills:
+- `mb journal-note --domain <name> "<content>"` — find-or-create bucket + append child task. Sanitização kebab-case + NFD-strip de acentos PT-BR.
+- `mb journal-close` (stdin: `## Append` + `## Transitions`) — write engine determinístico. Skill compõe payload com transições in-place já decididas (matching semântico permanece na skill per F3 design-reviewer).
+- `mb journal-review [--days N | --from D1 --to D2]` (scan) ou `mb journal-review --apply` (stdin transitions) — scan mecânico emite markdown estruturado consumido pela skill; skill faz 4 heurísticas semânticas + retém findings em conversation memory + re-invoca `--apply` com transições concretas (per F2 design-reviewer).
+- `mb init-project [--repo-path <path>] [--basename <name>] [--cluster <name>] [--subcluster <name>]` — lookups mrconfig + REPOS.md; skill orquestra `AskUserQuestion` enum 9-cluster apenas no fallback (per F1 design-reviewer).
+
+Decisão registrada em [ADR-002](docs/decisions/ADR-002-materializacao-cli-mb.md) (9 decisões cobrindo CLI, cascateamento, divisão CLI/skill, manifests PT-BR preservados, sem suite de testes formal). Adendos cirúrgicos em ADR-001 Sub-decisões 1, 3, 4, 10 registram cascateamento per ADR-034 critério.
+
+### Changed
+
+- **4 SKILL.md viram thin orchestrators** (`/journal-note`, `/journal-close`, `/journal-review`, `/init-logseq-project`) — preservam frontmatter + scope guards + substância heurístico-semântica (matching, princípios editoriais, 4 heurísticas, cluster prompt); delegam writes ao CLI. `/journal-load` permanece markdown-only (sem assimetria CLI > MD per critério target-aware).
+- **CLAUDE.md § "What this repository is"** reescrito refletindo substância em `meta_bridge` CLI + skills como thin orchestrators.
+- **CLAUDE.md § "Plugin layout"** ganha entries pra `pyproject.toml`, `meta_bridge/` package, ADR-002.
+- **`plugin.json` + `marketplace.json` descriptions** convergem pra PT-BR (alinhado a SKILL.md frontmatter; contradição não-bloqueante com `philosophy.md` § Convenção de idioma reconhecida).
+- **README.md** ganha seção `## CLI mb` + tabela de skills realign refletindo divisão thin orchestrator / CLI.
+
+### Notes
+
+- Sem suite de testes formal — validação manual por subcomando contra graph Logseq real (golden path coberto durante materialização). Gatilho de revisão: incidente reportado pelo operador OU finding `/journal-review` apontando drift correlacionado a invocação CLI.
+- Hook `hooks/suggest_journal_close.py` permanece intacto (lógica independente; sem dependência circular com CLI).
+- Faceta cross-repo pendente (out-of-scope): atualizar snapshot `TIER_SNAPSHOT_2026_06_11` em `meta-portability-mcp/.../tools.py` — coordenada via plano runbook em `meta-system`.
+
 ## 0.6.1 — 2026-06-13
 
 ### Notes

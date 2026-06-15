@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "meta-bridge"
+version = "0.6.1"
+description = "CLI standalone para skills de bridge entre sessões CC e graph Logseq (materializa Tier 1 candidato per meta-system ADR-016)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Fernando Furtado" }]
+dependencies = ["click>=8.0"]
+
+[project.scripts]
+mb = "meta_bridge.cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["meta_bridge"]

@@ -6,16 +6,19 @@ This file provides guidance to Claude Code when working in this repository.
 
 A **Claude Code plugin** materializing the bridge between CC sessions and a Logseq cognitive graph. Companion to [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit); architecture context in [`meta-system`](https://github.com/fppfurtado/meta-system) (private).
 
-No build, no tests, no runtime in the plugin itself. The "code" is markdown frontmatter (skills) + short Python script (hook). Validation is manual — install the plugin into a project with the assumed Logseq setup and exercise each skill.
+Substância de write vive em **`meta_bridge` (Python CLI via Click)** — entry-point `mb` instalável via `pipx install -e .`. 4 subcomandos (`mb journal-note`, `mb journal-close`, `mb journal-review`, `mb init-project`) cobrem o trabalho mecânico das 4 skills substantivas; `/journal-load` permanece markdown-only. As 4 SKILL.md correspondentes viram **thin orchestrators** que delegam writes ao CLI e preservam substância heurístico-semântica (matching, princípios editoriais de síntese, 4 heurísticas detectivas, cluster prompt). Sem suite de testes formal — validação manual por subcomando contra graph Logseq real cobre golden path.
 
 ## Plugin layout
 
 - `.claude-plugin/plugin.json` — plugin manifest.
 - `.claude-plugin/marketplace.json` — exposes the plugin to `/plugin marketplace add`.
-- `skills/<name>/SKILL.md` — 5 skills (`/journal-note`, `/journal-close`, `/journal-load`, `/init-logseq-project`, `/journal-review`).
+- `pyproject.toml` + `meta_bridge/` — Python package (hatchling minimalista; dependência única `click >= 8.0`). Entry-point `mb = meta_bridge.cli:cli`.
+- `meta_bridge/{cli.py, journal_note.py, journal_close.py, journal_review.py, init_project.py, _paths.py}` — write engine + 4 subcomandos.
+- `skills/<name>/SKILL.md` — 5 skills (`/journal-note`, `/journal-close`, `/journal-load`, `/init-logseq-project`, `/journal-review`). 4 são thin orchestrators do CLI; `/journal-load` permanece markdown-only.
 - `hooks/hooks.json` — `Stop` event binding for `suggest_journal_close.py`.
-- `hooks/suggest_journal_close.py` — auto-gated Python script (triple gate: marker + `.claude/local/` + Logseq desktop closed).
+- `hooks/suggest_journal_close.py` — auto-gated Python script (triple gate: marker + `.claude/local/` + Logseq desktop closed). Lógica independente do CLI (sem dependência circular).
 - `docs/decisions/ADR-001-skills-de-bridge.md` — mechanical ADR (10 sub-decisions covering skill internals).
+- `docs/decisions/ADR-002-materializacao-cli-mb.md` — materialização do CLI mb substituindo Tier 1 MCP candidato implícito (per `meta-system` ADR-016).
 
 ## Hard runtime assumptions (not configurable)
 
@@ -36,9 +39,9 @@ These paths are hardcoded in skills. Changing them requires patching the skills,
 
 ## What Claude will typically be asked here
 
-- Adjust skill bodies as Logseq setup evolves.
+- Adjust skill bodies (thin orchestrators) ou módulos `meta_bridge.*` (write engine) as Logseq setup evolves.
 - Add new ADR via direct Write (no `/new-adr` skill installed in this plugin by default — `pragmatic-dev-toolkit` provides that).
-- Bump version + push.
+- Bump version (sincroniza `meta_bridge/__init__.py:__version__` + `plugin.json` + `marketplace.json` via `/release` skill) + push.
 
 ## What Claude will NOT be asked here
 
@@ -50,7 +53,7 @@ These paths are hardcoded in skills. Changing them requires patching the skills,
 <!-- pragmatic-toolkit:config -->
 ```yaml
 paths:
-  version_files: [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json"]
+  version_files: [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", "pyproject.toml", "meta_bridge/__init__.py"]
   changelog: CHANGELOG.md
   plans_dir: local
 test_command: null
