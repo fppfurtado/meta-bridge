@@ -5,6 +5,9 @@ import click
 
 from . import __version__
 
+# Imports de subcomandos vão no FIM deste arquivo — quebrar essa ordem causa
+# import cycle, pois cada módulo importa `cli` e `fail_if_logseq_open` daqui.
+
 
 def _logseq_open() -> bool:
     result = subprocess.run(
@@ -30,12 +33,6 @@ def cli() -> None:
     """meta-bridge — CLI standalone para skills de bridge CC ↔ Logseq."""
 
 
-@cli.command("journal-note")
-def journal_note() -> None:
-    """Find-or-create hashtag-bucket no journal de hoje + append child task (stub)."""
-    click.echo("mb journal-note: stub — implementação no Bloco 2.")
-
-
 @cli.command("journal-close")
 def journal_close() -> None:
     """Sintetiza sessão CC no journal de hoje (write engine; matching na skill) (stub)."""
@@ -52,3 +49,6 @@ def journal_review() -> None:
 def init_project() -> None:
     """Cria/atualiza Project Page no graph Logseq (stub)."""
     click.echo("mb init-project: stub — implementação no Bloco 5.")
+
+
+from . import journal_note as _journal_note  # noqa: E402,F401 — registra @cli.command
