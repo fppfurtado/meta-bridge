@@ -22,11 +22,16 @@ Overlap conceitual com `/journal-close`: ambos fecham TODOs por evidência, mas 
 /journal-review --from 2026-05-01 --to 2026-05-31  # range arbitrário
 /journal-review --interactive      # detective + wizard residual após
 /journal-review --write-summary    # detective + bloco summary no journal de hoje
+/journal-review --bucket-min-journals 2 --bucket-min-tasks 2  # afrouxa K=3→2 e M=3→2 em janela curta
 ```
 
 - `--days N` ou `--from/--to`: passados ao CLI (validação lá; mensagens claras).
 - `--interactive`: wizard residual GTD após análise detective. Default off.
 - `--write-summary`: bloco `## Journal review` no journal de hoje. Default off.
+- `--bucket-min-journals N`: override do threshold K da heurística 2c `bucket-underused`. Default aplica quando ausente (K=3).
+- `--bucket-min-tasks N`: override do threshold M da heurística 2c `bucket-underused`. Default aplica quando ausente (M=3).
+- `--zombie-days N`: override do threshold T da heurística 2b `task-zombie`. Default aplica quando ausente (T=21).
+- `--emerging-min-mentions N`: override do threshold N da heurística 2d `bucket-emerging`. Default aplica quando ausente (N=4).
 
 ## Passos
 
@@ -50,15 +55,15 @@ Finding: `(source-path, source-line, marker original → DONE)`.
 
 #### 2b. Heurística 2 — `task-zombie` (apply)
 
-Pra cada marker ativo: idade > T dias (T=14 default) + zero DONE relacionado + zero referência em narrativa. Finding: archive (DONE) ou cancel (CANCELLED) — operador escolhe.
+Pra cada marker ativo: idade > T dias (T=21 default, override via `--zombie-days N`) + zero DONE relacionado + zero referência em narrativa. Finding: archive (DONE) ou cancel (CANCELLED) — operador escolhe.
 
 #### 2c. Heurística 3 — `bucket-underused` (report-only)
 
-Pra cada bucket no inventário: aparece em < K journals (K=2) E < M tasks abertas (M=2). Finding com sugestão archive/fund — apply manual via Edit/Write.
+Pra cada bucket no inventário: aparece em < K journals (K=3 default, override via `--bucket-min-journals N`) E < M tasks abertas (M=3 default, override via `--bucket-min-tasks N`). Finding com sugestão archive/fund — apply manual via Edit/Write.
 
 #### 2d. Heurística 4 — `bucket-emerging` (report-only)
 
-Hashtag/conceito em narrativas (≥ N=3 menções) que NÃO existe como bucket top-level. Finding com sugestão criar bucket — apply manual.
+Hashtag/conceito em narrativas (≥ N=4 menções default, override via `--emerging-min-mentions N`) que NÃO existe como bucket top-level. Finding com sugestão criar bucket — apply manual.
 
 **Falsos-positivos heading-style** (ex.: `WAITING Próximos passos`): judgment filtra antes de emitir finding.
 
@@ -139,6 +144,6 @@ Repassar output do `--apply` ao operador + agregado de findings emitidos por heu
 - Não derivar bucket do cwd — opera cross-files.
 - Não inflar análise quando substância é magra — recusa silenciosa elegante.
 - Não fazer commit em logseq-notes.
-- Não estender janela default — N=30 é coerente com curation mensal.
+- Não estender janela default — 30 dias é coerente com curation mensal.
 - Não confundir com `/journal-close` v0.4.1 — eixos distintos (session context vs janela cross-journal).
 - **Não passar IDs opacos pro CLI** (per F2 absorvido): skill mantém findings em conversation memory + envia paths/linhas/transições concretas.
