@@ -33,12 +33,7 @@ def cli() -> None:
     """meta-bridge — CLI standalone para skills de bridge CC ↔ Logseq."""
 
 
-@cli.command("init-project")
-def init_project() -> None:
-    """Cria/atualiza Project Page no graph Logseq (stub)."""
-    click.echo("mb init-project: stub — implementação no Bloco 5.")
-
-
 from . import journal_note as _journal_note  # noqa: E402,F401 — registra @cli.command
 from . import journal_close as _journal_close  # noqa: E402,F401 — registra @cli.command
 from . import journal_review as _journal_review  # noqa: E402,F401 — registra @cli.command
+from . import init_project as _init_project  # noqa: E402,F401 — registra @cli.command
