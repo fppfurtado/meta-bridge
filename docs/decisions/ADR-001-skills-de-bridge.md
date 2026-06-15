@@ -691,6 +691,18 @@ Decisão central da Sub-decisão 10 ("detective-first com 4 heurísticas estrutu
 
 **Cross-refs:** [`ADR-002`](ADR-002-materializacao-cli-mb.md) § Decisão 3 — Divisão CLI/skill por F3/F2; Sub-decisões 1/3/4 § Adendos (2026-06-15) (mesmo cascateamento nas demais skills).
 
+#### Adendo v0.3.2 (2026-06-15) — recalibração thresholds K/M/T/N + flags opcionais semânticos
+
+Defaults das heurísticas 2b/2c/2d recalibrados contra densidade real do graph pessoal observada em dogfood de 2026-06-13: heurística 2c `bucket-underused` com defaults antigos K=2 ∧ M=2 dispararia em 5/6 buckets na janela default 30d (`#meta-bridge`, `#pragmatic-dev-toolkit`, `#meta-portability`, `#h3-finance-agent`, `#dotfiles`), todos satisfazendo `K' ≤ 1` (aparecem em ≤ 1 journal) ∧ `M' ≤ 1` (≤ 1 task aberta) — pattern reconhecido de dataset pessoal single-operator com baixa task-density natural vs. dataset corporativo squad-like implicitamente assumido nos defaults v0.3.0.
+
+Valores novos: T=21 (heurística 2b `task-zombie`), K=3 ∧ M=3 (heurística 2c `bucket-underused`), N=4 (heurística 2d `bucket-emerging`). Calibração emergiu via **observação empírica direta** no dogfood — não estava enumerada como gatilho específico na lista de § Gatilhos de revisão futuros desta Sub-decisão (que cobre apply estrutural h3-h4, bucket-co-occurrence, bucket-rename-implicit, bucket-naming-drift, wizard residual opt-out); o BACKLOG entry consumida cita "parametrização via flags como solução estabelecida" referindo-se a paralelo histórico de patterns de calibração no toolkit, não a gatilho enumerado aqui.
+
+Flags opcionais semânticos materializados na seção `## Argumentos` da SKILL.md, override caso-a-caso: `--bucket-min-journals N` (alias K), `--bucket-min-tasks N` (alias M), `--zombie-days N` (alias T), `--emerging-min-mentions N` (alias N). Nomes semânticos vs. matemáticos (`--threshold-K/M/T/N`) escolhidos pra auto-documentar a invocação — operador não precisa lembrar do mapping letra→heurística meses depois. Defaults aplicam quando flag ausente; flag presente substitui o default da heurística correspondente.
+
+Adendo per ADR-034 do toolkit critério "refinamento doutrinal", **4 critérios satisfeitos**: (i) decisão central da Sub-decisão 10 — "detective-first com 4 heurísticas estruturais sobre janela configurável + wizard residual opt-in" — intacta; (ii) sem categoria nova (refinamento de valores numéricos + parametrização); (iii) sem restrição externa (calibração interna ao plugin); (iv) refinamento mecânico de defaults + adição de flags. Alinha com prática dos Adendos vizinhos v0.4.1/v0.4.3 da Sub-decisão 3 de **explicitar os 4 critérios ADR-034** (v0.4.1/v0.4.3 enunciam em prosa corrida; este Adendo numera pra densificar a inspeção).
+
+**Cross-refs:** Sub-decisão 5 (predecessor `/weekly-review` v0.2.0 — herdou K/M/T/N implicitamente sem calibração); Adendos vizinhos v0.4.1 e v0.4.3 da Sub-decisão 3 (estilo editorial análogo de Adendo materializando refinamento mecânico com 4 critérios ADR-034 explícitos); Adendo (2026-06-15) "CLI thin orchestrator" desta Sub-decisão 10 (cascateamento prévio que confirmou doutrinariamente que thresholds K/M/T/N permanecem na SKILL.md, não migram pro CLI — `meta_bridge.journal_review` emite counts mecânicos; judgment heurístico aplica thresholds).
+
 ## Consequências
 
 ### Benefícios
