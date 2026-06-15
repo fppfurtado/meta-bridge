@@ -33,12 +33,6 @@ def cli() -> None:
     """meta-bridge — CLI standalone para skills de bridge CC ↔ Logseq."""
 
 
-@cli.command("journal-close")
-def journal_close() -> None:
-    """Sintetiza sessão CC no journal de hoje (write engine; matching na skill) (stub)."""
-    click.echo("mb journal-close: stub — implementação no Bloco 3.")
-
-
 @cli.command("journal-review")
 def journal_review() -> None:
     """Detective-first com 4 heurísticas MVP sobre janela --days N (stub)."""
@@ -52,3 +46,4 @@ def init_project() -> None:
 
 
 from . import journal_note as _journal_note  # noqa: E402,F401 — registra @cli.command
+from . import journal_close as _journal_close  # noqa: E402,F401 — registra @cli.command
