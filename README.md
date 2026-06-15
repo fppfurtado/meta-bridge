@@ -8,17 +8,42 @@ Companion to [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-d
 
 ## What's inside
 
+A partir de v0.7.0, substância de write vive no **CLI `mb`** (Python via Click); 4 das 5 skills viram thin orchestrators que delegam writes ao CLI. Substância heurístico-semântica (matching, princípios editoriais, heurísticas detectivas, cluster prompt) permanece nas skills. Decisão registrada em [ADR-002](docs/decisions/ADR-002-materializacao-cli-mb.md) — materialização por critério target-aware de [`meta-system` ADR-016](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-016-target-aware-packaging-mecanico-substitui-mcp-first.md).
+
 | Component | Type | What it does |
 |-----------|------|--------------|
-| `/journal-note <content>` | Skill | Find-or-create top-level `- #<domínio>` bucket in today's Logseq journal + append child task. Domain derived from cwd (git repo → basename; outside git → AskUserQuestion enum `#thought`/`#draft`/`#idea` + Other with kebab-case sanitization). Native GTD marker preserved when input starts with `TODO `/`DOING `/`WAITING `/`DONE `/`CANCELLED `. Mechanical sub-bullets extracted: `commit:<hash>`, `plan:<slug>`. Requires Logseq desktop closed (`pgrep -xi logseq` gate). |
-| `/journal-close` | Skill | Synthesizes the current CC session into `- DONE <subject>` tasks grouped by bucket `- #<repo>` with mechanical sub-bullets. Find-or-create idempotent cross-skill with prior `/journal-note` calls + intra-skill dedup by `commit:<hash>` (Stop hook firing twice doesn't duplicate). Multi-repo collection via explicit probe of cwds touched in session + `git log` per cwd. Synthesis-then-confirm UX via AskUserQuestion. |
-| `/journal-load [--days N] [--bucket #X]` | Skill | Read-only loads journal content into CC working memory. Default = today's journal full. `--days N` extends retroactive window (`[hoje-N, hoje]` inclusive); `--bucket #X` filters to a specific top-level bucket per journal. Surfaces content grouped by date in reverse chronological order. Read-only — exempt from `pgrep -xi logseq` gate per ADR-001 Sub-decisão 7 Adendo (2026-06-12). |
-| `/init-logseq-project` | Skill | Creates or re-syncs the Project Page in the Logseq graph for the repo at cwd. Idempotent: preserves human-edited `status::`, `description::`, `## Follow-ups`, `## Decisões locais`; overwrites only 4 mechanical props (`cluster`, `subcluster`, `repo-path`, `repo-host`). Cluster resolution probes `~/.mrconfig` → `~/Projects/meta-system/REPOS.md` → operator enum. |
-| `/journal-review [--days N] [--from D --to D] [--interactive] [--write-summary]` | Skill | Detective-first review of configurable journal window (default 30 days, `[hoje-N, hoje]` inclusive) via 4 structural heuristics (`task-closure-by-context`, `task-zombie`, `bucket-underused`, `bucket-emerging`). Findings grouped with inline evidence; preview-first via single AskUserQuestion (Apply all / Cherry-pick via Other / Cancel). Heuristics 1-2 apply marker change in-place; heuristics 3-4 report-only (manual apply). Opt-in GTD wizard residual via `--interactive` for tasks without findings (same mechanic as `/weekly-review` v0.2.0). Successor to `/weekly-review` per ADR-001 Sub-decisão 10. |
-| `suggest_journal_close` | Hook | `Stop` event hook, auto-gated triplo (canonical marker `[PRAGMATIC: plan-done]` emitted by pragmatic-dev-toolkit's `/run-plan` in its done step + `.claude/local/` in cwd + `~/Notes/logseq/` exists AND Logseq desktop closed). When all pass, prints JSON `{"systemMessage": ...}` to stdout (CC 2.1.x canonical non-blocking soft notification) nudging toward `/journal-close`. |
+| `/journal-note <content>` | Skill (thin orchestrator) → `mb journal-note` | Skill deriva `--domain` (git toplevel → basename; senão → AskUserQuestion enum); CLI faz find-or-create top-level `- #<domínio>` + append child task. Native GTD marker preservado quando input começa com `TODO`/`DOING`/`WAITING`/`DONE`/`CANCELLED `. Sub-bullets mecânicos: `commit:<hash>`, `plan:<slug>`. Sanitização kebab-case + NFD-strip de acentos PT-BR. Gate `pgrep -xi logseq`. |
+| `/journal-close` | Skill (thin orchestrator) → `mb journal-close` | Skill faz matching semântico de TODO/WAITING ↔ DONE da sessão CC + síntese editorial humano-amigável agrupada por bucket; CLI é write engine determinístico recebendo payload markdown via stdin (`## Append` + `## Transitions`). Dedup por `commit:<hash>`, modify-in-place atomic, bootstrap journal. |
+| `/journal-load [--days N] [--bucket #X]` | Skill (MD-only) | Read-only — carrega conteúdo de journals na working memory do CC. **Permanece markdown-only** (sem assimetria CLI > MD; ver ADR-002 § Decisão 5). Default = journal de hoje completo; `--days N` estende janela retroativa; `--bucket #X` filtra. Exempt do gate Logseq. |
+| `/init-logseq-project` | Skill (thin orchestrator) → `mb init-project` | CLI faz lookup mecânico de cluster (`~/.mrconfig` → `~/Projects/meta-system/REPOS.md`) + bootstrap via Project Template + props mecânicas idempotentes; skill orquestra `AskUserQuestion` enum 9-cluster apenas no fallback. Preserva props humanas (`status::`, `description::`, blocos `##`). |
+| `/journal-review [--days N\|--from D --to D] [--interactive] [--write-summary]` | Skill (thin orchestrator) → `mb journal-review` | Skill aplica 4 heurísticas semânticas (`task-closure-by-context`, `task-zombie`, `bucket-underused`, `bucket-emerging`) sobre scan estruturado emitido pelo CLI. Preview-first via AskUserQuestion (Aplicar tudo / Cherry-pick / Cancelar). CLI scan emite markers ativos + DONE-tasks + narrativas + inventário de buckets em ordem cronológica; `--apply` aplica transições. Skill retém findings em conversation memory entre invocações. Wizard residual via `--interactive`. Sucessor de `/weekly-review`. |
+| `suggest_journal_close` | Hook | `Stop` event hook, auto-gated triplo (canonical marker `[PRAGMATIC: plan-done]` emitted by pragmatic-dev-toolkit's `/run-plan` in its done step + `.claude/local/` in cwd + `~/Notes/logseq/` exists AND Logseq desktop closed). When all pass, prints JSON `{"systemMessage": ...}` to stdout (CC 2.1.x canonical non-blocking soft notification) nudging toward `/journal-close`. Lógica independente do CLI. |
+
+## CLI `mb`
+
+CLI standalone Python instalável via `pipx`:
+
+```bash
+pipx install -e /path/to/meta-bridge
+mb --help
+```
+
+Subcomandos:
+- `mb journal-note [--domain <name>] "<content>"` — find-or-create bucket + append child task (sem `--domain`: deriva basename do git toplevel da cwd)
+- `mb journal-close` (stdin: `## Append` + `## Transitions`) — write engine pra fechamento de sessão
+- `mb journal-review [--days N | --from D1 --to D2]` (scan) ou `mb journal-review --apply` (stdin transitions)
+- `mb init-project [--repo-path <path>] [--basename <name>] [--cluster <name>] [--subcluster <name>]`
+
+Sem suite de testes formal — validação manual por subcomando contra graph Logseq real (golden path coberto).
 
 ## Installation
 
+CLI:
+```bash
+pipx install -e /path/to/meta-bridge
+```
+
+Plugin Claude Code:
 ```
 /plugin marketplace add fppfurtado/meta-bridge
 /plugin install meta-bridge@fppfurtado-meta-bridge

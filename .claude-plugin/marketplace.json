@@ -1,7 +1,7 @@
 {
   "name": "fppfurtado-meta-bridge",
   "metadata": {
-    "description": "Curated marketplace for Fernando Furtado's meta-bridge plugin — Claude Code ↔ Logseq cognitive hub."
+    "description": "Marketplace do plugin meta-bridge do Fernando Furtado — bridge Claude Code ↔ Logseq cognitive hub."
   },
   "owner": {
     "name": "Fernando Furtado",
@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "meta-bridge",
-      "description": "Bridge skills + hook materializing Camada 3 between Claude Code sessions and a Logseq cognitive graph. /journal-note for cross-domain capture in hashtag-buckets; /journal-close for session synthesis as DONE tasks grouped by repo; /journal-load for read-only loading of journal content into CC working memory; /init-logseq-project for repo→Project Page sync; /journal-review for detective-first review of configurable journal window via 4 structural heuristics + opt-in GTD wizard (successor to /weekly-review); suggest_journal_close hook reacting to pragmatic-dev-toolkit's /run-plan completion marker.",
+      "description": "Skills + hook + CLI mb materializando Camada 3 entre sessões Claude Code e graph Logseq. /journal-note pra captura cross-domain em hashtag-buckets; /journal-close pra síntese de sessão como DONE tasks agrupados por repo; /journal-load pra carregar conteúdo de journals na working memory do CC (read-only); /init-logseq-project pra sync repo→Project Page; /journal-review pra review detective-first de janela configurável via 4 heurísticas estruturais + wizard GTD opt-in (sucessor de /weekly-review); hook suggest_journal_close reagindo ao marker de fim de /run-plan do pragmatic-dev-toolkit. Substância de write vive em meta_bridge (Python CLI via Click); skills viram thin orchestrators preservando substância editorial-semântica.",
       "author": {
         "name": "Fernando Furtado",
         "email": "fppfurtado@outlook.com",

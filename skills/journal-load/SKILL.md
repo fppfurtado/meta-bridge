@@ -103,7 +103,7 @@ Exit.
 - Não sintetizar nem comentar o conteúdo carregado — `load` é primitiva read-only; síntese cabe à reasoning subsequente da sessão (ou ao operador).
 - Não aplicar gate `pgrep -xi logseq` — read-only é exceção doutrinária per Adendo (2026-06-12) a ADR-001 Sub-decisão 7. UX intencional: operador frequentemente trabalha com Logseq aberto.
 - Não inferir bucket do cwd — `--bucket` exige hashtag explícita do operador. Diferente de `/journal-note` que deriva `#<basename>` do repo (write tem contexto único; load pode ser cross-domínio independente do cwd).
-- Não classificar, mover, nem editar tasks lidas — escopo é load. Classificação GTD é `/weekly-review`.
+- Não classificar, mover, nem editar tasks lidas — escopo é load. Classificação GTD é `/journal-review` (sucessor de `/weekly-review` per ADR-001 Sub-decisão 10).
 - Não escrever no journal — read-only absoluto.
 - Não compor síntese estilo `/journal-close` — close é write-final-da-sessão; load é input pra sessão. Direções opostas, propósitos opostos.
 - Não filtrar por marker GTD (TODO/DOING/WAITING) inline — load surface integral; filter por marker reabre via gatilho de revisão futura se demand emergir (não YAGNI hoje).
