@@ -22,14 +22,14 @@ Overlap conceitual com `/journal-close`: ambos fecham TODOs por evidência, mas 
 /journal-review --from 2026-05-01 --to 2026-05-31  # range arbitrário
 /journal-review --interactive      # detective + wizard residual após
 /journal-review --write-summary    # detective + bloco summary no journal de hoje
-/journal-review --bucket-min-journals 2 --bucket-min-tasks 2  # afrouxa K=3→2 e M=3→2 em janela curta
+/journal-review --bucket-min-journals 1 --bucket-min-tasks 1  # mata 2c em janela curta (zero findings)
 ```
 
 - `--days N` ou `--from/--to`: passados ao CLI (validação lá; mensagens claras).
 - `--interactive`: wizard residual GTD após análise detective. Default off.
 - `--write-summary`: bloco `## Journal review` no journal de hoje. Default off.
-- `--bucket-min-journals N`: override do threshold K da heurística 2c `bucket-underused`. Default aplica quando ausente (K=3).
-- `--bucket-min-tasks N`: override do threshold M da heurística 2c `bucket-underused`. Default aplica quando ausente (M=3).
+- `--bucket-min-journals N`: override do threshold K da heurística 2c `bucket-underused`. Default aplica quando ausente (K=2).
+- `--bucket-min-tasks N`: override do threshold M da heurística 2c `bucket-underused`. Default aplica quando ausente (M=2).
 - `--zombie-days N`: override do threshold T da heurística 2b `task-zombie`. Default aplica quando ausente (T=21).
 - `--emerging-min-mentions N`: override do threshold N da heurística 2d `bucket-emerging`. Default aplica quando ausente (N=4).
 
@@ -59,7 +59,7 @@ Pra cada marker ativo: idade > T dias (T=21 default, override via `--zombie-days
 
 #### 2c. Heurística 3 — `bucket-underused` (report-only)
 
-Pra cada bucket no inventário: aparece em < K journals (K=3 default, override via `--bucket-min-journals N`) E < M tasks abertas (M=3 default, override via `--bucket-min-tasks N`). Finding com sugestão archive/fund — apply manual via Edit/Write.
+Pra cada bucket no inventário: aparece em < K journals (K=2 default, override via `--bucket-min-journals N`) E < M tasks abertas (M=2 default, override via `--bucket-min-tasks N`). Finding com sugestão archive/fund — apply manual via Edit/Write.
 
 #### 2d. Heurística 4 — `bucket-emerging` (report-only)
 
