@@ -305,6 +305,33 @@ Decisão central da Sub-decisão 3 ("skill compõe síntese humano-amigável + r
 
 **Cross-refs:** [`ADR-002`](ADR-002-materializacao-cli-mb.md) § Decisão 3 — Divisão CLI/skill por F3/F2; Sub-decisão 1 § Adendo (2026-06-15) (mesmo cascateamento em `/journal-note`); Sub-decisão 4 § Adendo (2026-06-15) (mesmo em `/init-logseq-project`); Sub-decisão 10 § Adendo (2026-06-15) (mesmo em `/journal-review`).
 
+#### Adendo v0.4.3 (2026-06-15 II) — thin orchestrator preserva exemplos inline pra ancorar composição editorial
+
+**Origem:** dogfood do CLI `/journal-close` na própria sessão `materializar-cli-mb` (2026-06-15) revelou que a SKILL.md thin orchestrator enxuta (~117 linhas pós-cascateamento) carregava princípios editoriais v0.4.1 **apenas em referência cruzada** (Adendos v0.3.0/v0.4.0/v0.4.1) sem exemplos inline. Resultado: composição editorial pelo agente drift do padrão dos fechamentos pure-skill prévios.
+
+Comparação documentada (operador conduziu análise side-by-side de 4 buckets pure-skill anteriores vs bucket recém-composto):
+
+- Frame perdeu trajetória X→Y; virou metadata-at-end ("8 blocos, 11 commits, PR mergeado")
+- Insight enunciou resultado em vez de momento-de-descoberta ("foi a divisão CLI/skill via F3/F2 absorvidas")
+- Antipadrão v0.4.1 enumeração inline em DONE reapareceu ("DONE `mb subA` + `subB` + `subC` + `subD`")
+- 2ª pessoa caiu de 5-8 ocorrências por bucket pra 1 ocorrência em 30+ linhas
+- Repetição inter-seções entre `DONE Realign` e `Direção que emerge`
+- Mudanças finas 2-3 linhas com explicação interna em vez de 1-2 linhas densas
+
+**Hipótese de causa**: refatoração para thin orchestrator removeu Steps 3d (exemplo sessão rica) e 3e (exemplo runbook simples) que ancoravam composição em shot-distance. Princípios em referência cruzada não compensam exemplos canonical inline.
+
+Fix em v0.4.3 (refinamento mecânico — decisão central intacta):
+
+- **Step 3.0 novo (Checklist editorial pré-composição)**: 6 antipadrões v0.4.1 explicitados como gatilhos de revisão durante composição (não checklist mecânico pós-fato). Inclui 2ª pessoa como sinal de quality (4-8 ocorrências por bucket em sessão rica).
+- **Step 3a-bis novo (Exemplo sessão rica)**: bucket `#meta-system` canonical da sessão `generalizacao-mecanizacao` (2026-06-11) com sinais editoriais anotados — Frame em 2 linhas, Insight com 2ª pessoa, DONE conceitual, Mudanças finas densas, Direção sem repetição.
+- **Step 3a-ter novo (Exemplo runbook simples)**: degradação elegante DONE-only flat — anchor pra sessão sem substância editorial rica.
+
+Sem ADR novo. Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério (todos 4 satisfeitos: decisão central de "skill compõe síntese humano-amigável" intacta; sem categoria nova; sem restrição externa; refinamento + explicativo).
+
+**Pattern reusable**: thin orchestrator de skill que carrega substância heurístico-semântica precisa de exemplos canonical inline em shot-distance. Princípios apenas em referência cruzada não ancoram composição do agente. Cross-skill se ≥2 instâncias similares emergirem (`/journal-review` é candidato natural — também é thin orchestrator carregando substância semântica via 4 heurísticas).
+
+**Cross-refs:** Adendo (2026-06-15) anterior — CLI thin orchestrator (mecanismo); este Adendo v0.4.3 — anchor editorial pra preservar quality da composição pós-cascateamento. `.claude/local/NOTES.md` § 2026-06-15 entry "Pattern thin orchestrator sem exemplos inline drifta composição editorial" (captura do padrão emergente).
+
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
 Skill `skills/init-logseq-project/SKILL.md`. Frontmatter:
