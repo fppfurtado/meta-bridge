@@ -4,6 +4,7 @@ import datetime
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 import click
@@ -21,7 +22,13 @@ SANITIZE_REMOVE_RE = re.compile(r"[^a-z0-9-]")
 
 
 def sanitize_domain(raw: str) -> str:
-    s = raw.strip().lower().replace(" ", "-").replace("_", "-")
+    """trim → lowercase → NFD-strip-accents → espaço/underscore→hífen →
+    remoção de não-[a-z0-9-]. NFD preserva semântica de `ç`→`c`, `ã`→`a` etc.
+    para PT-BR, em vez de descartar (spec SKILL.md inline diz só 'alfanumérico'
+    sem qualificar — interpretação literal perdia letras; pós-validação)."""
+    nfd = unicodedata.normalize("NFD", raw.strip().lower())
+    no_accents = "".join(c for c in nfd if not unicodedata.combining(c))
+    s = no_accents.replace(" ", "-").replace("_", "-")
     return SANITIZE_REMOVE_RE.sub("", s)
 
 
@@ -105,6 +112,10 @@ def append_child(
         if lines[i].startswith("- "):
             insertion = i
             break
+    # Walk back sobre blank lines pra manter separador antes do próximo bucket
+    # (children novos ficam contíguos aos existentes do mesmo bucket).
+    while insertion > bucket_idx + 1 and lines[insertion - 1].strip() == "":
+        insertion -= 1
 
     new_block = [child_line, *sub_bullets]
     new_lines = lines[:insertion] + new_block + lines[insertion:]
