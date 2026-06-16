@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 A **Claude Code plugin** materializing the bridge between CC sessions and a Logseq cognitive graph. Companion to [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit); architecture context in [`meta-system`](https://github.com/fppfurtado/meta-system) (private).
 
-Substância de write vive em **`meta_bridge` (Python CLI via Click)** — entry-point `mb` instalável via `pipx install -e .`. 4 subcomandos (`mb journal-note`, `mb journal-close`, `mb journal-review`, `mb init-project`) cobrem o trabalho mecânico das 4 skills substantivas; `/journal-load` permanece markdown-only. As 4 SKILL.md correspondentes viram **thin orchestrators** que delegam writes ao CLI e preservam substância heurístico-semântica (matching, princípios editoriais de síntese, 4 heurísticas detectivas, cluster prompt). Sem suite de testes formal — validação manual por subcomando contra graph Logseq real cobre golden path.
+Substância de write vive em **`meta_bridge` (Python CLI via Click)** — entry-point `mb` instalável via `pipx install -e .`. 4 subcomandos (`mb journal-note`, `mb journal-close`, `mb journal-review`, `mb init-project`) cobrem o trabalho mecânico das 4 skills substantivas; `/journal-load` permanece markdown-only. As 4 SKILL.md correspondentes viram **thin orchestrators** que delegam writes ao CLI e preservam substância heurístico-semântica (matching, princípios editoriais de síntese, 4 heurísticas detectivas, cluster prompt). Plugin ship também 2 hooks bridging (Stop event sugerindo `/journal-close`; SessionStart event sugerindo `/journal-load` quando cwd casa com repo owned/active da constelação). Validação manual cobre golden path dos subcomandos mecânicos; suite parcial pytest cobre subcomandos/hooks com parsing-complexo (per ADR-002 § Decisão 6 Adendo 2026-06-16 — critério parsing-complexo → pytest; mecânico → manual).
 
 ## Plugin layout
 
@@ -15,8 +15,10 @@ Substância de write vive em **`meta_bridge` (Python CLI via Click)** — entry-
 - `pyproject.toml` + `meta_bridge/` — Python package (hatchling minimalista; dependência única `click >= 8.0`). Entry-point `mb = meta_bridge.cli:cli`.
 - `meta_bridge/{cli.py, journal_note.py, journal_close.py, journal_review.py, init_project.py, _paths.py}` — write engine + 4 subcomandos.
 - `skills/<name>/SKILL.md` — 5 skills (`/journal-note`, `/journal-close`, `/journal-load`, `/init-logseq-project`, `/journal-review`). 4 são thin orchestrators do CLI; `/journal-load` permanece markdown-only.
-- `hooks/hooks.json` — `Stop` event binding for `suggest_journal_close.py`.
-- `hooks/suggest_journal_close.py` — auto-gated Python script (triple gate: marker + `.claude/local/` + Logseq desktop closed). Lógica independente do CLI (sem dependência circular).
+- `hooks/hooks.json` — `Stop` + `SessionStart` event bindings.
+- `hooks/suggest_journal_close.py` — Stop hook auto-gated (triple gate: marker + `.claude/local/` + Logseq desktop closed); sugere `/journal-close` pós-`/run-plan`. Lógica independente do CLI.
+- `hooks/suggest_session_start_tip.py` — SessionStart hook (gate único cwd-matching contra REPOS.md owned/active, filtro NEGATIVO); sugere `/journal-load --days 2 --bucket <repo>`. Per ADR-001 Sub-decisão 6 Adendo v0.2.0 (2026-06-16).
+- `tests/test_suggest_session_start_tip.py` — suite pytest parcial (12 testes) sob critério parsing-complexo per ADR-002 § Decisão 6 Adendo (2026-06-16). Demais subcomandos seguem validação manual.
 - `docs/decisions/ADR-001-skills-de-bridge.md` — mechanical ADR (10 sub-decisions covering skill internals).
 - `docs/decisions/ADR-002-materializacao-cli-mb.md` — materialização do CLI mb substituindo Tier 1 MCP candidato implícito (per `meta-system` ADR-016).
 

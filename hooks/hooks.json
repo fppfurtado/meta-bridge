@@ -1,5 +1,5 @@
 {
-  "description": "Stop event hook suggesting /journal-close when pragmatic-dev-toolkit's /run-plan emits its canonical done marker. Auto-gating triplo per ADR-001 Sub-decisão 6 (marker + .claude/local/ + Logseq desktop closed).",
+  "description": "Hooks do plugin meta-bridge — 2 trajetórias de hook bridging meta-bridge↔CC (per ADR-001 Sub-decisão 6 + Adendo 2026-06-16): Stop event sugerindo /journal-close pós-/run-plan; SessionStart event sugerindo /journal-load quando cwd casa com repo owned/active da constelação.",
   "hooks": {
     "Stop": [
       {
@@ -9,6 +9,19 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_journal_close.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "description": "Timeout 5s — gate único cwd-matching contra REPOS.md owned/active (filtro NEGATIVO excluindo overview + consumido externo); silent fora da constelação.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_session_start_tip.py",
             "timeout": 5
           }
         ]

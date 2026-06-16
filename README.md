@@ -17,7 +17,8 @@ A partir de v0.7.0, substância de write vive no **CLI `mb`** (Python via Click)
 | `/journal-load [--days N] [--bucket #X]` | Skill (MD-only) | Read-only — carrega conteúdo de journals na working memory do CC. **Permanece markdown-only** (sem assimetria CLI > MD; ver ADR-002 § Decisão 5). Default = journal de hoje completo; `--days N` estende janela retroativa; `--bucket #X` filtra. Exempt do gate Logseq. |
 | `/init-logseq-project` | Skill (thin orchestrator) → `mb init-project` | CLI faz lookup mecânico de cluster (`~/.mrconfig` → `~/Projects/meta-system/REPOS.md`) + bootstrap via Project Template + props mecânicas idempotentes; skill orquestra `AskUserQuestion` enum 9-cluster apenas no fallback. Preserva props humanas (`status::`, `description::`, blocos `##`). |
 | `/journal-review [--days N\|--from D --to D] [--interactive] [--write-summary] [--bucket-min-journals N] [--bucket-min-tasks N] [--zombie-days N] [--emerging-min-mentions N]` | Skill (thin orchestrator) → `mb journal-review` | Skill aplica 4 heurísticas semânticas (`task-closure-by-context`, `task-zombie`, `bucket-underused`, `bucket-emerging`) sobre scan estruturado emitido pelo CLI. Preview-first via AskUserQuestion (Aplicar tudo / Cherry-pick / Cancelar). CLI scan emite markers ativos + DONE-tasks + narrativas + inventário de buckets em ordem cronológica; `--apply` aplica transições. Skill retém findings em conversation memory entre invocações. Wizard residual via `--interactive`. 4 flags opcionais de threshold (K=2/M=2/T=21/N=4 defaults) sobrescrevem heurísticas 2b/2c/2d caso-a-caso. Sucessor de `/weekly-review`. |
-| `suggest_journal_close` | Hook | `Stop` event hook, auto-gated triplo (canonical marker `[PRAGMATIC: plan-done]` emitted by pragmatic-dev-toolkit's `/run-plan` in its done step + `.claude/local/` in cwd + `~/Notes/logseq/` exists AND Logseq desktop closed). When all pass, prints JSON `{"systemMessage": ...}` to stdout (CC 2.1.x canonical non-blocking soft notification) nudging toward `/journal-close`. Lógica independente do CLI. |
+| `suggest_journal_close` | Hook (Stop) | Stop event hook, auto-gated triplo (canonical marker `[PRAGMATIC: plan-done]` emitted by pragmatic-dev-toolkit's `/run-plan` in its done step + `.claude/local/` in cwd + `~/Notes/logseq/` exists AND Logseq desktop closed). When all pass, prints JSON `{"systemMessage": ...}` to stdout (CC 2.1.x canonical non-blocking soft notification) nudging toward `/journal-close`. Lógica independente do CLI. |
+| `suggest_session_start_tip` | Hook (SessionStart) | SessionStart event hook, gate único cwd-matching: resolve cwd via `git rev-parse --show-toplevel`, match contra repos owned/active de `~/Projects/meta-system/REPOS.md` (filtro NEGATIVO — exclui overview e subsection consumido externo). Match → emit JSON systemMessage sugerindo `/journal-load --days 2 --bucket <repo>`; no-match/falha → silent. Suite pytest parcial em `tests/test_suggest_session_start_tip.py` (per ADR-001 Sub-decisão 6 Adendo v0.2.0 + ADR-002 § Decisão 6 Adendo, 2026-06-16). |
 
 ## CLI `mb`
 
@@ -34,7 +35,7 @@ Subcomandos:
 - `mb journal-review [--days N | --from D1 --to D2]` (scan) ou `mb journal-review --apply` (stdin transitions)
 - `mb init-project [--repo-path <path>] [--basename <name>] [--cluster <name>] [--subcluster <name>]`
 
-Sem suite de testes formal — validação manual por subcomando contra graph Logseq real (golden path coberto).
+Validação manual por subcomando contra graph Logseq real cobre golden path dos subcomandos mecânicos. Suite pytest parcial em `tests/` cobre subcomandos/hooks com parsing-complexo (per ADR-002 § Decisão 6 Adendo, 2026-06-16). Materialização inaugural: `tests/test_suggest_session_start_tip.py` cobrindo parser markdown REPOS.md. Dev extras: `pipx install -e ".[dev]"` ou `pip install pytest` + `pytest tests/`.
 
 ## Installation
 
@@ -54,7 +55,8 @@ Plugin Claude Code:
 - **Logseq** desktop installed at `~/Notes/logseq/` (path is hardcoded — change requires patching skills).
 - The operator's daily-journal template (scaffold mínimo pós-v0.2.0; from the [logseq-notes](https://github.com/fppfurtado/logseq-notes) repo per [ADR-002 of logseq-notes](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) Sub-decisão 1).
 - Active templates in `~/Notes/logseq/pages/`: `Project Template.md`, `daily-journal.md` (from `logseq-notes`). Templates `session-close.md` and `weekly-review.md` are archived in v0.2.0+ — skills compose in-skill.
-- **Hook only**: [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit) ≥ v2.13.0 installed (for the `[PRAGMATIC: plan-done]` marker emission by `/run-plan`). Hook gates silent if marker absent.
+- **Stop hook only**: [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit) ≥ v2.13.0 installed (for the `[PRAGMATIC: plan-done]` marker emission by `/run-plan`). Hook gates silent if marker absent.
+- **SessionStart hook only**: `~/Projects/meta-system/REPOS.md` present with at least one Status=`active` repo under a `## <cluster>` section (filtro NEGATIVO excludes overview + `### Runtime auxiliar consumido externo` subsection). Hook silent if REPOS.md absent or cwd outside git.
 
 Skills fail closed with clear messages when dependencies are missing — no silent corruption.
 
