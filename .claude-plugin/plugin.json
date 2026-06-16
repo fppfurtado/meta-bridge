@@ -1,6 +1,6 @@
 {
   "name": "meta-bridge",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Plugin Claude Code que materializa a bridge entre sessões CC e graph Logseq. CLI mb (Python) faz writes mecânicos; 4 skills viram thin orchestrators preservando substância editorial. Captura cross-domain em hashtag-buckets, síntese de sessão com markers GTD, sync repo→Project Page, journal review detective com 4 heurísticas. Personal-tooling — assume Logseq em ~/Notes/logseq/.",
   "author": {
     "name": "Fernando Furtado",

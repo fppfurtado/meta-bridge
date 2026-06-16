@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## 0.7.0 — 2026-06-16
 
 ### Added
 
@@ -12,6 +12,8 @@
 
 Decisão registrada em [ADR-002](docs/decisions/ADR-002-materializacao-cli-mb.md) (9 decisões cobrindo CLI, cascateamento, divisão CLI/skill, manifests PT-BR preservados, sem suite de testes formal). Adendos cirúrgicos em ADR-001 Sub-decisões 1, 3, 4, 10 registram cascateamento per ADR-034 critério.
 
+**`/journal-review` ganha 4 flags semânticos pra override de thresholds detectivos**: `--bucket-min-journals N` (K do 2c bucket-underused), `--bucket-min-tasks N` (M do 2c), `--zombie-days N` (T do 2b task-zombie), `--emerging-min-mentions N` (N do 2d bucket-emerging). Nomes semânticos vs matemáticos auto-documentam qual heurística está sendo overrideada na invocação.
+
 ### Changed
 
 - **4 SKILL.md viram thin orchestrators** (`/journal-note`, `/journal-close`, `/journal-review`, `/init-logseq-project`) — preservam frontmatter + scope guards + substância heurístico-semântica (matching, princípios editoriais, 4 heurísticas, cluster prompt); delegam writes ao CLI. `/journal-load` permanece markdown-only (sem assimetria CLI > MD per critério target-aware).
@@ -19,12 +21,16 @@ Decisão registrada em [ADR-002](docs/decisions/ADR-002-materializacao-cli-mb.md
 - **CLAUDE.md § "Plugin layout"** ganha entries pra `pyproject.toml`, `meta_bridge/` package, ADR-002.
 - **`plugin.json` + `marketplace.json` descriptions** convergem pra PT-BR (alinhado a SKILL.md frontmatter; contradição não-bloqueante com `philosophy.md` § Convenção de idioma reconhecida).
 - **README.md** ganha seção `## CLI mb` + tabela de skills realign refletindo divisão thin orchestrator / CLI.
+- **`/journal-review` thresholds recalibrados contra densidade pessoal-graph**: T (zombie-days) `14 → 21`; N (emerging-min-mentions) `3 → 4`. Empirical motivation: dogfood 2026-06-13 mostrou ruído com defaults antigos. K=M=2 do `bucket-underused` (2c) preservado após validação contra graph real — a conjunção `<K AND <M` *afrouxa* com K/M maiores (descoberta editorial cristalizada em ADR-001 Sub-decisão 10 § Adendo v0.3.2).
+- **`/journal-close` SKILL.md v0.4.3 ganha exemplos inline pra ancorar composição editorial**: Step 3.0 novo (checklist editorial pré-composição com 6 antipadrões v0.4.1 como gatilhos de revisão); Step 3a-bis (exemplo sessão rica canonical — bucket `#meta-system` da `generalizacao-mecanizacao`); Step 3a-ter (exemplo runbook simples — degradação elegante DONE-only flat). Dogfood revelou que princípios apenas em referência cruzada não ancoram composição do agente. Pattern reusable cross-skill.
+- **ADR-001 Sub-decisão 10 prose**: bullets descritivos de H1/H2 incluem DOING (estavam só TODO/WAITING — drift textual; SKILL.md já consistente em H1/H2/Step 7 desde v0.3.0).
 
 ### Notes
 
 - Sem suite de testes formal — validação manual por subcomando contra graph Logseq real (golden path coberto durante materialização). Gatilho de revisão: incidente reportado pelo operador OU finding `/journal-review` apontando drift correlacionado a invocação CLI.
 - Hook `hooks/suggest_journal_close.py` permanece intacto (lógica independente; sem dependência circular com CLI).
 - Faceta cross-repo pendente (out-of-scope): atualizar snapshot `TIER_SNAPSHOT_2026_06_11` em `meta-portability-mcp/.../tools.py` — coordenada via plano runbook em `meta-system`.
+- BACKLOG editorial cleanup: session-audit signal queue aplicado pós-merge worktree (housekeeping `## Status` em planos locais + gatilho condicional pra revisitar K/M do 2c); cross-ref redundante removido na entry de scan ADR-011; calibração K/M/T/N marcada como concluída.
 
 ## 0.6.1 — 2026-06-13
 
