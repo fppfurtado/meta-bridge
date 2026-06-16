@@ -12,6 +12,9 @@ license = { text = "MIT" }
 authors = [{ name = "Fernando Furtado" }]
 dependencies = ["click>=8.0"]
 
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
 [project.scripts]
 mb = "meta_bridge.cli:cli"
 
