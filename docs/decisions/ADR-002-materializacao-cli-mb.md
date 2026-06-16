@@ -86,6 +86,25 @@ Plugin permanece sem `tests/` formal. Validação manual `## Verificação manua
 
 **Gatilho de revisão refinado** (per F6 design-reviewer): incidente reportado pelo operador **OU** finding de `/journal-review` apontando para drift correlacionado a invocação CLI — regressão silenciosa em write idempotente pode ficar invisível por semanas em journals rotacionais.
 
+#### Adendo (2026-06-16) — refinamento "sem suite" → "suite parcial sob critério parsing-complexo"
+
+Decisão original (2026-06-15) declarava "sem suite de testes formal no MVP" — `tests/` ausente do layout do plugin; validação manual cobria 100% do golden path. Materialização do hook `suggest_session_start_tip.py` (per ADR-001 Sub-decisão 6 Adendo v0.2.0, 2026-06-16) trouxe gap não-coberto: parser markdown não-trivial de `~/Projects/meta-system/REPOS.md` (filtro NEGATIVO sobre estrutura de heading + colunas variáveis de tabela) tem failure mode silente — match incorreto resulta em hook que não dispara, indistinguível de degradação graciosa. Validação manual exercita golden path mas não trava invariantes do parser sob refactor futuro.
+
+Refinamento parcial da Decisão 6:
+
+- **Decisão central preserva golden path em validação manual** para subcomandos/hooks **mecânicos simples** (`mb journal-note` append-to-bucket, `mb init-project` idempotent file create — operações cujo failure mode é loud e exercitado em cada invocação real).
+- **Nova exceção condicional sob critério parsing-complexo**: subcomandos/hooks que parsing markdown estruturado (REPOS.md tables, Logseq journal headings) ou JSON schemas externos ganham suite pytest cobrindo invariantes do parser + edge cases. Critério aciona retroativamente conforme parsing-complexo for adicionado.
+- **Materialização inaugural do critério**: `tests/test_suggest_session_start_tip.py` (12 testes — 6 unit em `_load_owned_active` cobrindo filtro NEGATIVO + Status filter + cross-cluster + REPOS.md ausente; 6 e2e in-process em `main()` via monkeypatch). `pyproject.toml` ganha `[project.optional-dependencies] dev = ["pytest>=7"]`.
+- **Sem migração retroativa neste plano**: `mb journal-note`, `mb journal-close`, `mb journal-review`, `mb init-project` seguem sem coverage — não-blocking porque nenhum tem parsing-complexo ao nível do hook novo. `/journal-review` aplica heurísticas detectivas sobre journals, mas parsing é tail-call simples (find headings + bullets); falha é loud (skill emite report).
+
+**Reinterpretação do Gatilho 3** (originalmente "incidente real de regressão silenciosa em write CLI" → suite parcial introduzida nesta data): gatilho agora dispara **migração retroativa total cross-subcomandos** (não bootstrap de `tests/`, já materializado). Quando incidente real emergir, ação é estender suite parcial para cobrir todos os subcomandos sob critério revisitado (parsing-complexo + write idempotente + heurísticas detectivas).
+
+**Alternativa (E) revisitada** (§ Alternativas consideradas alternativa (E)): "Suite de testes formal `tests/` desde MVP" foi rejeitada por YAGNI no MVP. Posição preservada — suite total continua YAGNI no MVP corrente; suite parcial introduzida por contexto novo (hook `suggest_session_start_tip.py` com parsing-complexo não-existente no MVP original 2026-06-15).
+
+**Cross-ref bidirecional:** ADR-001 Sub-decisão 6 Adendo v0.2.0 (2026-06-16) — registra 2ª trajetória SessionStart que materializa o critério parsing-complexo aqui consolidado.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central preservada para subcomandos mecânicos (validação manual cobre golden path como default); refinamento aditivo com exceção condicional para parsing-complexo; sem categoria nova de decisão; sem restrição externa nova.
+
 ### Decisão 7 — Manifests preservam PT-BR
 
 `plugin.json` e `marketplace.json` descriptions seguem PT-BR convencional (alinhado a SKILL.md frontmatter em PT-BR). Contradição não-bloqueante com `pragmatic-dev-toolkit/philosophy.md` § Convenção de idioma (default EN para marketplace) **reconhecida**: plugin é personal-tooling, audiência efetiva é o operador. Canonical EN reservado para revisitação se adoção externa emergir.
