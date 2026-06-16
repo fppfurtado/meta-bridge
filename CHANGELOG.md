@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.8.0 — 2026-06-16
+
+### Added
+
+**2ª trajetória de hook bridging meta-bridge↔CC** via `hooks/suggest_session_start_tip.py`. Hook standalone Python isomorfo a `suggest_journal_close.py` (Sub-decisão 6 v0.1.5), com binding `SessionStart` em `hooks/hooks.json` paralelo ao `Stop` existente. Gate único cwd-matching: resolve cwd via `git rev-parse --show-toplevel | xargs basename`, match contra repos `owned/active` de `~/Projects/meta-system/REPOS.md` (parser markdown aplicando filtro NEGATIVO — exclui overview `## Clusters (N)` e subsection `### Runtime auxiliar consumido externo`). Match → emit JSON `{"systemMessage": "💡 /journal-load --days 2 --bucket <repo> ..."}` em stdout; no-match / falha → exit 0 silente. Decisão registrada em [ADR-001 § Sub-decisão 6 Adendo v0.2.0](docs/decisions/ADR-001-skills-de-bridge.md) — registro factual sem postular pattern de N trajetórias per philosophy YAGNI/Ockham (3ª materialização aguarda confirmação).
+
+**Suite pytest parcial em `tests/test_suggest_session_start_tip.py`** (12 testes — 6 unit em `_load_owned_active` cobrindo filtro NEGATIVO + Status filter + cross-cluster; 6 e2e in-process em `main()` via monkeypatch de `hook.REPOS_MD` + `sys.stdin`). `pyproject.toml` ganha `[project.optional-dependencies] dev = ["pytest>=7"]`. Materialização inaugural do critério "parsing-complexo → pytest" cristalizado em ADR-002 § Decisão 6 Adendo.
+
+### Changed
+
+- **ADR-002 § Decisão 6** ganha Adendo refinando "sem suite de testes formal no MVP" → "suite parcial sob critério parsing-complexo". Decisão central preservada para subcomandos/hooks mecânicos simples (validação manual cobre golden path); nova exceção condicional para parsing-complexo (markdown estruturado, JSON schemas externos). Gatilho 3 reinterpretado: agora dispara migração retroativa total cross-subcomandos quando incidente real emergir.
+- **CLAUDE.md** § "What this repository is" passa a mencionar "2 hooks bridging" (Stop sugerindo `/journal-close`; SessionStart sugerindo `/journal-load`) + critério parsing-complexo. § "Plugin layout" lista `hooks/suggest_session_start_tip.py` + `tests/test_suggest_session_start_tip.py` + `hooks/hooks.json` ganha "Stop + SessionStart bindings".
+- **README.md** Component table ganha row `suggest_session_start_tip | Hook (SessionStart)` simétrica ao `suggest_journal_close`. § Runtime dependencies desambigua "Hook only" → "Stop hook only" + novo bullet "SessionStart hook only" listando dep de REPOS.md `owned/active`.
+- **`plugin.json` + `marketplace.json` descriptions** mencionam ambas trajetórias de hook bridging (Stop sugerindo `/journal-close` + SessionStart sugerindo `/journal-load`).
+
+### Notes
+
+- Hook `suggest_journal_close.py` permanece intacto — Adendo v0.2.0 é refinamento aditivo (2ª trajetória paralela), sem mutação do hook existente.
+- Pendência em BACKLOG ## Próximos (gatilho ≥1 report manual): `_load_owned_active` não cobre repos com `Path` basename ≠ `Repo` field em REPOS.md — `logseq-notes` (`~/Notes/logseq` → basename `logseq`), `dotfiles` (`~/.local/share/chezmoi` → basename `chezmoi`), `scripts` (`~/Scripts` → basename `Scripts`) ficam SILENT indevidamente.
+- Pendências de validação operacional pós-release (NOTES.md 2026-06-16): Cenário 5 do `## Verificação manual` (mv defensivo `~/Projects/meta-system/REPOS.md{,.bak}; ...`) e Cenário 10 (plugin reinstall + nova sessão CC pra observar SessionStart hook real disparando in vivo).
+- Housekeeping BACKLOG: 3 planos locais (`journal-review-refactor`, `materializar-cli-mb`, `calibracao-thresholds-journal-review`) marcados como Concluído via Edit cirúrgico `## Status` no commit `5ec1614`.
+
 ## 0.7.0 — 2026-06-16
 
 ### Added
