@@ -485,6 +485,26 @@ Fix em v0.1.5 (refinamento mecânico — decisão central intacta, gates triplos
 
 Sem ADR novo: decisão estrutural (Stop event hook, gates triplos, marker contract) intacta — só forma de output muda. Linha 188 atualizada com sumário.
 
+#### Adendo v0.2.0 (2026-06-16) — 2ª trajetória de hook bridging: SessionStart sugerindo `/journal-load`
+
+Plugin ganha 2º hook: `hooks/suggest_session_start_tip.py`. Sub-decisão 6 original (Stop event hook `suggest_journal_close.py` sugerindo `/journal-close` quando `/run-plan` do `pragmatic-dev-toolkit` termina) permanece como trajetória 1 intacta — versionamento v0.1.5 + Adendo (2026-05-28) preservados; nada muda no hook existente.
+
+**Trajetória 2 — SessionStart event:**
+
+- **Gate único:** `cwd` (do payload stdin do CC) resolve via `git -C <cwd> rev-parse --show-toplevel | xargs basename` para um basename; basename é procurado em set extraído de `~/Projects/meta-system/REPOS.md`. Match → tip emitida; no-match / falha de resolução (cwd fora de git, REPOS.md ausente) → exit 0 silente (degradação graciosa).
+- **Parser REPOS.md aplica filtro NEGATIVO:** exclui overview `## Clusters (N)` e tabelas sob subsection `### Runtime auxiliar consumido externo`; nas demais tabelas com colunas `Repo` + `Status`, aceita linhas cujo campo `Status` contém `active` (substring lowercase). Discrimina contra `external-dep` (third-party docs) e `archived`. Cobertura cross-cluster: todos os 9 clusters da constelação onde houver tabela com schema `Repo|...|Status|...`.
+- **Output:** JSON `{"systemMessage": "💡 /journal-load --days 2 --bucket <basename> traz contexto cross-sessão deste repo."}` em stdout — mesma mecânica do Stop hook per Adendo v0.1.5 acima (CC 2.1.x canonical para soft notification não-bloqueante).
+- **Binding em `hooks/hooks.json`:** seção `SessionStart` paralela ao `Stop` existente, mesmo timeout 5s.
+- **Cobertura de teste:** suite pytest em `tests/test_suggest_session_start_tip.py` (12 testes — 6 unit em `_load_owned_active` cobrindo filtro NEGATIVO + Status + cross-cluster; 6 e2e in-process em `main()` via monkeypatch de `hook.REPOS_MD` + `sys.stdin`). Suite parcial introduzida sob critério ADR-002 § Decisão 6 Adendo (2026-06-16) — "parsing complexo → pytest".
+
+Gate da trajetória 2 (cwd-matching contra inventário externo read-only) é estruturalmente diferente do gate da trajetória 1 (3 gates situacionais: transcript marker + `.claude/local/` + Logseq closed). 2 instâncias com gates de natureza distinta — generalização do pattern de "hook event suggestion" aguarda 3ª materialização per `philosophy.md` § "Quando YAGNI termina"; este Adendo registra a 2ª trajetória de forma factual sem postular invariante prospectiva.
+
+**Decisão de home — hook standalone vs CLI sub-comando `mb`:** alternativa originalmente apontada pelo `/triage` upstream em `meta-system` (entry-mensageira em `meta-system/BACKLOG.md § "Hook bridging SessionStart"`) era `mb session-start-tip` sub-comando CLI + wiring chezmoi para hooks user-settings. Revisitada via design-reviewer em `/triage` aqui (2026-06-16): hook standalone Python isomorfo a `suggest_journal_close.py` é precedente direto Sub-decisão 6 v0.1.5 — wiring automático via `hooks/hooks.json` no plugin install elimina coupling cross-repo chezmoi. Discoverability manual do CLI `mb` (cf. Adendo CLI thin orchestrator em Sub-decisão 1, 2026-06-15) não se aplica a `session-start-tip` — invocação manual fora de SessionStart context emite tip redundante.
+
+**Cross-ref bidirecional:** ADR-002 § Decisão 6 Adendo (2026-06-16) — refinamento "sem suite de testes formal no MVP" → "suite parcial sob critério parsing-complexo".
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: decisão central intacta (hook existente não modificado); refinamento aditivo (2º hook paralelo); sem categoria nova de decisão; sem restrição externa nova.
+
 ### Sub-decisão 7 — `pgrep` semantics
 
 Probe canonical antes de qualquer write no `~/Notes/logseq/`:
