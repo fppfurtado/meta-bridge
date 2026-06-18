@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1 — 2026-06-18
+
+### Added
+
+**Suite pytest formal pro sub-tool `skills/wiki-compile/sub-tools/compile.py`** via `tests/test_compile.py` — 13 testes (250 linhas) materializando a pré-condição "eficiência" do gatilho intermediário [ADR-021 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-021-mecanismos-de-revisao-formal-2-tipos.md) § auto-crítica permanente. Fecha pendência registrada em v0.9.0 § Notes (linha 14 do CHANGELOG anterior + entry cross-repo em `meta-system/docs/plans/onda-2-knowledge-layer-piloto.md` § Pendências de validação). Cobre 5 cenários enumerados: section order canonical preservada em `find_insert_position` (3 ramos) + `ensure_section` idempotente + dedup multi-line + idempotência de re-runs + edge case section sem trailing newline + edge case page sem properties block. 3 gaps absorvidos do qa-reviewer pré-commit (E2E `main()` validando ordem canonical no output composto + shape de prefix de `append_to_section` + 3 testes `validate()` fail-fast em input inválido). Pattern isomorfo ao precedente `tests/test_suggest_session_start_tip.py` (v0.8.0; importlib.util + monkeypatch sys.argv; sub-tool verificado sem side-effects no module load pelo design-reviewer pré-execução). Regression do bug histórico `find_insert_position` ignorando seções anteriores existentes (descoberto in vivo durante `/run-plan onda-2-knowledge-layer-piloto` do meta-system, 6ª chamada inseriu `Sources digeridas` ANTES de `Notas curadas` violando ordem canonical) cristalizado explicitamente no shape (c) do Cenário 1 como regression test formal.
+
+### Notes
+
+- Aplicação concreta do critério "parsing-complexo → pytest; mecânico → manual" cristalizado em [ADR-002 § Decisão 6 Adendo (2026-06-16)](docs/decisions/ADR-002-materializacao-cli-mb.md). 2ª materialização da exceção (1ª foi `test_suggest_session_start_tip.py` em v0.8.0).
+- Documentação meta atualizada (commit `5b2f818`): dual-entry recíproca Onda 2 do roadmap knowledge layer.
+
 ## 0.9.0 — 2026-06-18
 
 ### Added
