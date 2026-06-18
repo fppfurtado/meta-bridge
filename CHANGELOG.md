@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.0 — 2026-06-18
+
+### Added
+
+**Skill `/wiki-compile` v0 (knowledge layer Onda 2 — escopo Logseq-local estendido)** via `skills/wiki-compile/SKILL.md` orquestrador heurístico-semântica + `skills/wiki-compile/sub-tools/compile.py` sub-tool determinístico. Materializa Camada 3 (entity pages enriquecidas) do roadmap knowledge layer block-first per [Adendo 2026-06-17 ADR-013 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-013-adocao-knowledge-layer-destino-arquitetural-constelacao.md). Forma técnica per [ADR-017 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-017-skills-orquestrador-fino-sub-tool-deterministico.md) § decomposição faceta ii: substância heurística (decisão de o que agregar — relevância dos blocos-source) vive na skill; substância determinística (find-or-create section preservando ordem canonical `Notas curadas` → `Sources digeridas` → `Síntese` + literal append + dedup por conteúdo) vive no sub-tool reduzido (sem flags `--trail`/`--force`/`--source` per F4 do reviewer; modo único intra-graph). Skill restringe `--blocks` a paths intra-graph (`~/Notes/logseq/pages/*` + `~/Notes/logseq/journals/*`) — fontes cross-repo exigem captura prévia via `/journal-note` antes (preserva invariante SD2 literal append).
+
+**ADR-001 ganha Sub-decisão 11 — `/wiki-compile` mechanics** (pattern matching SD9 que estendeu pra `/journal-load` em v0.4.0). Substância reduzida a `/wiki-compile` v0 apenas per F7 do reviewer (pattern dual-entry escala com substância shipada, não com declaração pré-fato — `/wiki-lint` + `/wiki-distill` ganham Sub-decisões adicionais quando materializarem em Ondas 3+). Cross-refs ao plano Onda 1 + plano Onda 2 + `logseq-notes` ADR-003 (schema mecânico consumido) + ADR-017 (decomposição) + ADR-008 (critério necessidade arquitetural).
+
+### Notes
+
+- **Bug de ordem canonical no sub-tool descoberto em 1ª invocação real + reparado inline.** `find_insert_position` só procurava seções **posteriores**, ignorando anteriores existentes — quando entity page já tinha `## Notas curadas` e sub-tool foi invocado pra `## Sources digeridas`, caía no fallback "após page-level properties" inserindo Sources digeridas ANTES de Notas curadas, violando ordem canonical. Fix: probe reverse das seções anteriores antes do fallback; regression test pré-commit cobrindo ambos cenários (target sem posteriores e com anteriores existentes preserva ordem canonical).
+- **Pytest formal pro sub-tool ausente em v0** — meta-bridge ADR-002 Adendo declara critério "parsing-complexo → pytest; mecânico → manual"; sub-tool tem positioning logic não-trivial (validado empiricamente pelo bug acima — 1 escapou smoke). Captura como Pendência de validação no plano Onda 2 do meta-system (`docs/plans/onda-2-knowledge-layer-piloto.md`) — entry cross-repo pra meta-bridge BACKLOG materializa quando operador trabalhar em sessão dedicada cwd `~/Projects/meta-bridge`.
+- Skill `/wiki-compile` só vira invocável como slash command após bump + push + tag publicada + `/plugin marketplace update` + `/reload-plugins` + restart CC (per memory `project_cc_plugin_version_pinned_cache` — cache CC é version-pinned). Operação manual via `python3 sub-tools/compile.py` continua disponível.
+- **Piloto materializado entidade `knowledge-layer` em `logseq-notes`** (commit `665cc00`): `pages/knowledge-layer.md` enriquecida com 5 block-refs intra-graph cobrindo os 5 claims load-bearing canonical da knowledge layer + Sources digeridas com Andy Matuschak Evergreen Notes ingerida via WebFetch + Síntese 3 parágrafos. Audit empírico claim-ausência (per F5 do reviewer) = 0/5 ausentes → shipped OK. Dogfood do princípio fundamental 4 (auto-crítica permanente) per ADR-021 do meta-system: meta-system doctrine como domínio piloto Onda 2 = auto-referencial baixo-risco.
+
 ## 0.8.0 — 2026-06-16
 
 ### Added
