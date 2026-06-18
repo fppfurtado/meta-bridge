@@ -731,6 +731,50 @@ Adendo per ADR-034 do toolkit critério "refinamento doutrinal", **4 critérios 
 
 **Cross-refs:** Sub-decisão 5 (predecessor `/weekly-review` v0.2.0 — herdou K/M/T/N implicitamente sem calibração); Adendos vizinhos v0.4.1 e v0.4.3 da Sub-decisão 3 (estilo editorial análogo de Adendo materializando refinamento mecânico com 4 critérios ADR-034 explícitos); Adendo (2026-06-15) "CLI thin orchestrator" desta Sub-decisão 10 (cascateamento prévio que confirmou doutrinariamente que thresholds K/M/T/N permanecem na SKILL.md, não migram pro CLI — `meta_bridge.journal_review` emite counts mecânicos; judgment heurístico aplica thresholds).
 
+### Sub-decisão 11 — `/wiki-compile` mechanics (knowledge layer Onda 2 — escopo Logseq-local estendido)
+
+Skill `skills/wiki-compile/SKILL.md` + sub-tool `skills/wiki-compile/sub-tools/compile.py`. Frontmatter:
+- `name: wiki-compile`
+- `description: Agrega blocos intra-graph (pages/* + journals/*) numa entity page enriquecida com seções canonical "Notas curadas" + "Sources digeridas" + "Síntese" preservando block-ref trail`
+- `disable-model-invocation: false`
+
+**Escopo Logseq-local estendido pra knowledge layer.** ADR-001 originalmente cobria 4 skills (`/journal-note` + `/journal-close` + `/init-logseq-project` + `/weekly-review`) + 1 hook; Sub-decisão 9 estendeu pra 5 skills com `/journal-load`. Pós-Onda 1 do roadmap knowledge layer block-first ([Adendo 2026-06-17 a ADR-013 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-013-adocao-knowledge-layer-destino-arquitetural-constelacao.md)), escopo Logseq-local de `meta-bridge` estende pra incluir a 1ª skill da knowledge layer materializada nesta onda:
+
+- **`/wiki-compile`** (Onda 2 materializa v0): enrich blocos in-place + agregação em entity pages com seções canonical preservando block-ref trail intra-graph. Necessidade arquitetural per [ADR-008 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-008-skills-meta-reflexivas-categoria.md) § Decisão = bridge Logseq-local agentic que escreve no graph como filesystem markdown (paralelo direto a `/journal-close`). Forma técnica per [ADR-017 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-017-skills-orquestrador-fino-sub-tool-deterministico.md) § decomposição faceta ii: skill orquestrador heurístico-semântica (decisão de **o que** agregar — relevância dos blocos) + sub-tool determinístico (find-or-create section + literal append + dedup por conteúdo).
+
+Passos do orquestrador:
+1. Gate `pgrep -xi logseq` (per Sub-decisão 7) — failure-closed; write-heavy implica race window mais larga.
+2. Parse `--entity <name>` + `--blocks <path:block-id,...>`; rejeita paths fora de `~/Notes/logseq/pages/*` + `~/Notes/logseq/journals/*` com mensagem `fontes cross-repo exigem captura prévia via /journal-note no journal de hoje`.
+3. Find-or-create entity page com template canonical (`provenance:: #enriched` + seções "Notas curadas" / "Sources digeridas" / "Síntese") per [`logseq-notes` ADR-003 SD1+SD2](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-003-knowledge-layer-schema-mecanico.md).
+4. Decisão heurístico-semântica de o que agregar (julgamento agente — relevância dos blocos-source) → prepara lista de `((block-refs))` intra-graph com sub-bullet de trilha.
+5. Delega ao sub-tool determinístico (1 chamada por bloco selecionado): `python sub-tools/compile.py --entity-page <path> --section <header> --content <markdown>` — find-or-create section + literal append + dedup por conteúdo.
+6. Compõe `## Síntese` inline (substância é judgment agente, não append determinístico) via Edit tool.
+
+**Constraint upstream preservado.** Skill restringe `--blocks` a paths intra-graph porque [Sub-decisão 2 deste ADR](#sub-decisão-2--template-insertion-literal-append) (literal append, NÃO block-ref) dimensiona block-ref `((id))` apenas onde `id::` Logseq já materializou — fontes cross-repo (meta-system ADRs, ARCHITECTURE, roadmap) exigem captura prévia via `/journal-note` no journal de hoje pra ganhar `id::` antes de virar input do `/wiki-compile` (dogfood do pipeline meta-bridge; preserva tese block-first do roadmap).
+
+**Modelo evolutivo de disparo (per roadmap pattern "manual → semi-auto → auto").** Onda 2 materializa apenas `/wiki-compile` v0 manual disparado pelo operador; auto-trigger decidido Onda 5 do roadmap. Cabe reabrir homing pra skill local meta-reflexiva (per [ADR-008 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-008-skills-meta-reflexivas-categoria.md)) ou daemon separado quando auto-disparo materializar — decisão deferida sob princípio 4 fundamental "auto-crítica permanente" per [ADR-021 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-021-auto-critica-permanente-4o-principio-fundamental.md).
+
+**Homing canonical das 3 skills da knowledge layer declarado em [Adendo 2026-06-17 a ADR-013 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-013-adocao-knowledge-layer-destino-arquitetural-constelacao.md).** Esta Sub-decisão materializa `/wiki-compile` v0 apenas — `/wiki-lint` (health checks cross-graph) e `/wiki-distill` (síntese de concept page cross-entidade Camada 4) ganham Sub-decisões adicionais quando materializarem (Onda 3+); declaração pré-fato evitada per princípio YAGNI editorial — pattern dual-entry escala com substância shipada, não com declaração pré-fato (per ajuste F7 do `@design-reviewer` Onda 2).
+
+**Invariantes preservados:**
+- Gate `pgrep -xi logseq` aplica à `/wiki-compile` (per Sub-decisão 7 + Adendo v0.1.2). Write-heavy + bookkeeping de block-refs dispara race window mais larga que `/journal-note` — gate failure-closed é canonical.
+- Hashtag-bucket pattern preservado em journal (raw sources NÃO interferem com captura via `/journal-note` per `logseq-notes` ADR-002 retrofit) — raw sources moram em namespace canonical `sources/` separado per `logseq-notes` ADR-003 SD3.
+- Skills assumem contracts de ADR-004/006/013 do meta-system + ADR-001/002/003 do logseq-notes sem fallback defensivo.
+- **Invariante SD2 (literal append, NÃO block-ref) preservada** — `/wiki-compile` insere `((block-id))` apenas pra blocos intra-graph com `id::` já materializado; rejeita inputs cross-repo. Sub-tool determinístico aplica literal append no fim da seção alvo (sem block-ref resolvido em runtime).
+- Sub-tool NÃO rewrite ou remove `id::` de blocos (invariante Logseq — entity-as-page pattern). Bloco sem `id::` materializado → reporta, NÃO infere/cria, segue.
+
+**Tensão menor com [ADR-005 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-005-bridge-via-pragmatic-toolkit.md) § fronteiras.** Estado pré-Onda 2 = "5 skills + 1 hook" (Sub-decisão 9 estendeu pra `/journal-load`); estado pós-Onda 2 = "6 skills + 1 hook" (`/wiki-compile` v0 ship). Cardinalidade exata não fixada em ADR-005; extensão cabe editorialmente per ADR-005 § Critério de erosão auditável (skills permanecem intra-Logseq — `/wiki-compile` opera estritamente sobre `~/Notes/logseq/` no graph filesystem).
+
+**Cross-refs:**
+- [Adendo 2026-06-17 a ADR-013 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-013-adocao-knowledge-layer-destino-arquitetural-constelacao.md) (substância nuclear do roadmap knowledge layer + homing canonical das 3 skills + vocabulário canonical fixado).
+- [Plano Onda 1 do roadmap](https://github.com/fppfurtado/meta-system/blob/main/docs/plans/onda-1-knowledge-layer-doctrine.md) (PR #17 squash `b1afceb` — doctrine shipped).
+- [Plano Onda 2 do roadmap](https://github.com/fppfurtado/meta-system/blob/main/docs/plans/onda-2-knowledge-layer-piloto.md) (este plano consumidor — Blocos 2 + 3 materializam aqui).
+- [`logseq-notes` ADR-003](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-003-knowledge-layer-schema-mecanico.md) (schema mecânico — property canonical `provenance::` + namespace `sources/` + properties subset v0; contract concreto consumido pelo `/wiki-compile`).
+- [ADR-017 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-017-skills-orquestrador-fino-sub-tool-deterministico.md) § decomposição faceta ii (pattern orquestrador heurístico-semântica + sub-tool determinístico aplicado).
+- [ADR-008 do meta-system](https://github.com/fppfurtado/meta-system/blob/main/docs/decisions/ADR-008-skills-meta-reflexivas-categoria.md) (critério "necessidade arquitetural" aplicado no homing da skill em `meta-bridge`, precedendo decisão de forma técnica per ADR-016).
+
+Sub-decisão per [ADR-034 do `pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério "expansão de escopo": (i) decisão central deste ADR — "bridge Logseq-local materializa skills agentic com gate `pgrep` failure-closed + literal append + AskUserQuestion idiomática" — intacta; (ii) categoria nova (knowledge layer Camada 3 entity pages) **justifica** Sub-decisão própria (não Adendo) per pattern de Sub-decisão 9 que estendeu pra `/journal-load` em v0.4.0 (precedente de skill nova → Sub-decisão nova); (iii) sem restrição externa nova; (iv) caráter expansivo + cross-ref recíproco ao meta-system.
+
 ## Consequências
 
 ### Benefícios
