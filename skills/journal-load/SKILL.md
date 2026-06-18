@@ -73,28 +73,12 @@ Paths individuais ausentes na janela → silent skip (dia inativo é comportamen
 
 **Nenhum journal com match do bucket** → recusa silenciosa com `bucket #<hashtag> ausente na janela [<hoje-N>, <hoje>]`. Exit clean.
 
-### 5. Surface conteúdo + reportar sumário
+### 5. Reportar sumário
 
-Compose output agrupado por data, **ordem cronológica reversa** (mais recente primeiro):
+Conteúdo já entra na working memory CC quando o Read tool retorna no Step 4 — re-emitir verbatim é custo de output sem ganho ao objetivo declarado. Emitir 1 linha de sumário — apenas contagem e janela, sem comentário sobre o conteúdo:
 
-```
-## Journal YYYY-MM-DD (~/Notes/logseq/journals/<date>.md)
-
-<conteúdo lido literal>
-
----
-
-## Journal YYYY-MM-DD (~/Notes/logseq/journals/<date>.md)
-
-<conteúdo lido literal>
-```
-
-Sem síntese, sem comentário editorial — **load context é primitiva, não interpretação**. Operador (ou prompt subsequente da mesma sessão) consome o conteúdo carregado.
-
-Pós-output, 1 linha de sumário:
-
-- Sem `--bucket`: `<M> de <N> journals lidos na janela [hoje-N, hoje]`.
-- Com `--bucket`: `<M> de <N> journals com matches do bucket #<hashtag> na janela [hoje-N, hoje]`.
+- Sem `--bucket`: `<M> de <N> journals carregados na janela [<data-início>, <data-fim>]` (datas `YYYY-MM-DD`).
+- Com `--bucket`: `<M> de <N> journals com matches do bucket #<hashtag> na janela [<data-início>, <data-fim>]` ("matches" = journals em que o bucket foi encontrado e lido).
 
 Exit.
 
