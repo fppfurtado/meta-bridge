@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.2 — 2026-06-18
+
+### Fixed
+
+**Hook `session-start-tip`: path-vs-Repo basename mismatch** ([PR #6](https://github.com/fppfurtado/meta-bridge/pull/6)). Hook silenciava indevidamente 3 repos da constelação onde basename do path divergem do campo `Repo` em REPOS.md: `logseq-notes` (Path `~/Notes/logseq` → basename `logseq`), `dotfiles` (Path `~/.local/share/chezmoi` → basename `chezmoi`), `scripts` (Path `~/Scripts` → basename `Scripts`). Refactor de `_load_owned_active` retornando `dict[str, str]` (match_key → bucket_name) em vez de `set[str]`; novo helper `_derive_basename` encapsula strip 3-pattern (`.strip().strip("\`").strip()`) + `os.path.expanduser` + `os.path.basename`. Cada entry owned/active gera chave canonical (Repo field) SEMPRE e chave derivada (basename do Path expandido) CONDICIONALMENTE quando diverge; `main()` passa a usar `dict.get(basename)`; tip cita o bucket name canonical independente da chave que casou. Bug detectado in vivo em `/run-plan §3.2` cenário 8 cross-cluster sanity (2026-06-16); gatilho N≥1 disparado e endereçado aqui.
+
+### Notes
+
+- Suite pytest expandida pra 19 testes (12 existentes atualizados de set→dict + 7 novos: derivação Path quando diverge, expanduser, Path vazio, casing match, colisão last-write-wins, helper isolado, E2E `main()` via fake git repo). 3ª materialização do critério parsing-complexo → pytest do [ADR-002](docs/decisions/ADR-002-materializacao-cli-mb.md) § Decisão 6 Adendo (2026-06-16): suite hook bridging em v0.8.0 + suite sub-tool wiki-compile em v0.9.1 + expansão hook em v0.9.2.
+- Decisões F3/F4/F5/F6 do design-reviewer absorvidas pré-commit no `/triage` (strip pattern 3-strip paralelo ao parser corrente da coluna Repo; collision regression test `test_load_owned_active_collision_last_write_wins` protege contra refactor de ordem de iteração; cenário 6 manual delegado a pytest existente; helper isolado com 4 inputs canonical).
+- 6 cenários manuais PASS in vivo (Cenário 1 regression canonical em meta-bridge; Cenários 2-4 path basename matching em logseq-notes/dotfiles/scripts; Cenário 5 no-match silent em `/tmp`; Cenário 6 filtro NEGATIVO subsection em splitrail silenciado independente da chave) + Cenário 7 suite pytest 19/19 verde — 7/7 cenários totais validados pré-merge.
+
 ## 0.9.1 — 2026-06-18
 
 ### Added
