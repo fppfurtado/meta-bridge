@@ -581,17 +581,11 @@ Passos:
    - **Sem `--bucket`**: Read integral de cada journal existente na janela.
    - **Com `--bucket <hashtag>`**: extrair APENAS o bloco do bucket por journal — regex inicial `^- #<hashtag>($| )` (top-level, zero tab; análogo ao probe de bucket em Sub-decisão 1 Adendo v0.2.0); leitura sequencial até próxima linha matching `^- ` (próximo top-level — bucket, nota livre, ou outra entrada) ou EOF. Sub-bullets aninhados (≥1 tab) preservados como parte do bloco extraído. Bucket ausente naquele dia → silent skip.
 
-4. Surface o conteúdo extraído em texto agrupado por data, ordem cronológica reversa (mais recente primeiro):
-   ```
-   ## Journal YYYY-MM-DD (~/Notes/logseq/journals/<date>.md)
-   <conteúdo extraído literal>
-
-   ## Journal YYYY-MM-DD (~/Notes/logseq/journals/<date>.md)
-   <conteúdo extraído literal>
-   ```
-   Output direto no response stream — CC carrega o conteúdo na working memory, disponível para reasoning subsequente na sessão. Sem síntese, sem comentário editorial — load context é primitiva, não interpretação.
+4. Conteúdo de cada journal existente na janela entra na working memory CC pelo retorno do Read tool (Step 3). Sem output adicional neste passo.
 
 5. Reporta sumário pós-output (1-2 linhas): `<M de N journals lidos na janela [hoje-N, hoje]>` + bucket aplicado (se houver).
+
+**Adendo (2026-06-18) — Invariante "load ≠ surface":** Step 5 da SKILL.md ("Surface conteúdo + reportar sumário") teve o dump verbatim removido — conteúdo entra na working memory CC quando o Read tool retorna na fase Read filemask (Step 4 da SKILL.md, Step 3 do ADR); re-emitir verbatim é custo O(tamanho_journal) tokens de output sem ganho ao objetivo declarado (evidência empírica: journal de ~418 linhas → ~13K tokens de output, latência percebida = geração token-by-token, não disco). Invariante resultante: `load` é primitiva; consumidor do conteúdo é o reasoning subsequente do modelo, não o operador. Step 5 da SKILL.md renomeado para "Reportar sumário"; sumário curto permanece como único output canônico.
 
 **Edge cases:**
 
