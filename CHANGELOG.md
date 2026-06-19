@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.3 — 2026-06-18
+
+### Fixed
+
+**`mb journal-close`: BUCKET_RE aceita buckets com ponto** — regex `^- #([a-z0-9-]+)` excluía buckets versionados (`pje-2.1`, `pje-2.2`). Fix: charset estendido para `[a-z0-9.-]+`. Descoberto in vivo na sessão `pje-2.1` (append manual via Edit como fallback; TODO capturado no journal e materializado em sessão dedicada).
+
+### Changed
+
+**`/journal-load` Step 5: sumário curto em vez de dump verbatim** ([PR #7](https://github.com/fppfurtado/meta-bridge/pull/7)). Step 5 renomeado para "Reportar sumário"; dump verbatim por data removido — conteúdo já entra em working memory CC quando o Read tool retorna no Step 4; re-emitir verbatim adicionava custo O(tamanho\_journal) tokens de output sem ganho ao objetivo declarado (evidência empírica: journal de ~418 linhas → ~13K tokens de output). Skill emite apenas 1 linha de sumário: `<M> de <N> journals carregados na janela [<data-início>, <data-fim>]` (datas `YYYY-MM-DD`). Adendo (2026-06-18) a ADR-001 Sub-decisão 9 codificando invariante "load ≠ surface; primitiva ≠ echo". 3 findings do prompt-reviewer e 1 finding do doc-reviewer absorvidos/cutucados pré-commit.
+
 ## 0.9.2 — 2026-06-18
 
 ### Fixed
