@@ -37,7 +37,7 @@ from .journal_note import bootstrap_journal, find_or_create_bucket
 APPEND_HEADER = "## Append"
 TRANSITIONS_HEADER = "## Transitions"
 
-BUCKET_RE = re.compile(r"^- #([a-z0-9-]+)($| )")
+BUCKET_RE = re.compile(r"^- #([a-z0-9.-]+)($| )")
 COMMIT_HASH_RE = re.compile(r"commit:\s*([a-f0-9]{7,40})\b")
 # Separador ` | ` literal (espaço-pipe-espaço) — não usar \s* porque consumiria
 # TAB prefix do before/after (children Logseq são `\t- ...`). Body com `|`
