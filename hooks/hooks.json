@@ -1,5 +1,5 @@
 {
-  "description": "Hooks do plugin meta-bridge — 2 trajetórias de hook bridging meta-bridge↔CC (per ADR-001 Sub-decisão 6 + Adendo 2026-06-16): Stop event sugerindo /journal-close pós-/run-plan; SessionStart event sugerindo /journal-load quando cwd casa com repo owned/active da constelação.",
+  "description": "Hooks do plugin meta-bridge — 3 trajetórias de hook bridging meta-bridge↔CC (per ADR-001 Sub-decisão 6 + Adendo 2026-06-16 + Sub-decisão 12 2026-06-20): Stop event sugerindo /journal-close pós-/run-plan; Stop event disparando enrichment block-flow background quando journal de hoje tem buckets recém-fechados sem provenance; SessionStart event sugerindo /journal-load quando cwd casa com repo owned/active da constelação.",
   "hooks": {
     "Stop": [
       {
@@ -9,6 +9,17 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_journal_close.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "description": "Timeout 5s — auto-gating triplo (.claude/local/ + Logseq desktop fechado + journal com closed:: recente sem provenance); dispara enrich-blocks sub-tool em background detached (Popen start_new_session) per Sub-decisão 12.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_enrich_blocks.py",
             "timeout": 5
           }
         ]
