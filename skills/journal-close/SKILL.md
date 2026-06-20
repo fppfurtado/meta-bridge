@@ -10,7 +10,7 @@ Thin orchestrator do subcomando `mb journal-close` (CLI `meta-bridge`). Skill co
 
 Substância editorial (matching semântico, princípios de granularidade, filtros) é **heurístico-semântica** e **fica integralmente na skill**. CLI vira write engine — recebe payload via stdin e aplica writes sem refazer judgment.
 
-Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 3 (+ Adendos v0.3.0/v0.4.0/v0.4.1) e [ADR-002](../../docs/decisions/ADR-002-materializacao-cli-mb.md) § matching-on-skill.
+Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 3 (+ Adendos v0.3.0/v0.4.0/v0.4.1) e [ADR-002](../../docs/decisions/ADR-002-materializacao-cli-mb.md) § Decisão 3.
 
 ## Argumentos
 
@@ -131,7 +131,7 @@ Refinamento preventivo contra entries WAITING/TODO forward-looking stale no rasc
 2. **Para cada repo identificado** rodar `git log --since="48 hours ago" --oneline -15` com cwd absoluto `$HOME/Projects/<repo>`.
    - **Fail-soft** (cwd inexistente, não-git, permissão etc.): reportar in-prosa pré-Step 4 `git log falhou em <repo>: <erro literal> — prosseguindo sem probe deste repo` e seguir. Sem skip silente — operador ciente sem bloqueio.
 
-3. **Matching semântico in-skill** (per ADR-002 § matching-on-skill) entre cada WAITING/TODO cross-repo do rascunho e os commit subjects retornados. Judgment **conservador** (alinhado a Step 3b: "incerto → não propor transição"); cross-refs explícitos no sub-bullet do WAITING (commit hash, plan slug, `[[page]]`) valem como hint forte.
+3. **Matching semântico in-skill** (per ADR-002 § Decisão 3) entre cada WAITING/TODO cross-repo do rascunho e os commit subjects retornados. Judgment **conservador** (alinhado a Step 3b: "incerto → não propor transição"); cross-refs explícitos no sub-bullet do WAITING (commit hash, plan slug, `[[page]]`) valem como hint forte.
 
 4. **Match found → remoção silente da entry do rascunho** + **nota in-prosa pré-Step 4 preview**, segmentada por repo quando multi-repo:
    - Single repo, 1 entry: `Step 3c removeu 1 entry cross-repo stale: <entry literal> [fechada por <repo> commit <hash>: <subject>]`.

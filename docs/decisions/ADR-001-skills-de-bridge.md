@@ -332,6 +332,29 @@ Sem ADR novo. Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/f
 
 **Cross-refs:** Adendo (2026-06-15) anterior — CLI thin orchestrator (mecanismo); este Adendo v0.4.3 — anchor editorial pra preservar quality da composição pós-cascateamento. `.claude/local/NOTES.md` § 2026-06-15 entry "Pattern thin orchestrator sem exemplos inline drifta composição editorial" (captura do padrão emergente).
 
+#### Adendo v0.4.4 (2026-06-20) — Step 3c: probe externo cross-repo de "Próximos passos"
+
+**Motivação:** drift in vivo na sessão `remote-control` 2026-06-19 — rascunho do `/journal-close` listou `WAITING re-calibração thresholds kl-score ADR-001 (Onda 4 parte ii) — cwd kl-score` em "Próximos passos" sem probe; entry já estava stale (sessão paralela `kl-score` shipou ~3h antes via `fc41cba`). Gap: Step 2.5 + Step 3b probam TODOs prévios do journal contra DONEs da sessão CC (matching de TODOs antigos), mas WAITINGs/TODOs cross-repo recém-compostos pelo Step 3a NÃO eram probed contra estado dos repos cross-ref'd. 7ª instância empírica do memory `feedback_probe_estado_externo_antes_framing` (cross-repo `meta-system/.claude/local/NOTES.md`).
+
+**Mecânica do novo Step 3c** (entre Step 3b e o atual Step 3d Caso degenerado):
+
+1. **Identificar pares `(entry, repo)`** no rascunho recém-composto — para cada WAITING/TODO cuja linha (ou cujo sub-bullet imediato) contém ref cross-repo casando um de 3 patterns alternativos: `cwd <repo>`, `~/Projects/<repo>`, `[[fppfurtado/<repo>...]]`. Entries sem ref cross-repo ficam fora do probe.
+2. **Para cada repo identificado** (lista de-duplicada dos pares) rodar `git log --since="48 hours ago" --oneline -15` com cwd absoluto `$HOME/Projects/<repo>`. **Fail-soft** em falha (cwd inexistente, não-git, permissão etc.): emitir bullet in-prosa pré-Step 4 `git log falhou em <repo>: <erro literal> — prosseguindo sem probe deste repo`; sem skip silente nem interrupção (operador ciente sem bloqueio).
+3. **Matching semântico** in-skill (per [ADR-002](ADR-002-materializacao-cli-mb.md) § Decisão 3) entre cada WAITING/TODO cross-repo do rascunho e os commit subjects retornados. Judgment **conservador** (alinhado a Step 3b: "incerto → não propor transição"); cross-refs explícitos no sub-bullet do WAITING (commit hash, plan slug, `[[page]]`) valem como hint forte.
+4. **Match found → remoção silente** da entry do rascunho + **nota in-prosa** emitida pré-`AskUserQuestion` do Step 4 como bloco único, ordem `falhas primeiro → remoções depois`, 1 bullet por evento. Multi-repo segmenta a remoção por repo (`[<repo-a>] <entryA> [fechada por commit <hashA>: <subjectA>]; [<repo-b>] <entryB> [fechada por commit <hashB>: <subjectB>]`).
+
+Step 4 prompt-statement atualizado pra apresentar **3 substantivos**: rascunho (Step 3a), transições (Step 3b), nota in-prosa do Step 3c (quando presente). Operador inspeciona e pode reverter via `Edita via Other` (ex.: "reincluir entry X — o commit não fechou de fato"). **Step 3c não re-roda na re-composição** do `Edita via Other` — probe é one-shot por invocação; entries reintroduzidas via Other ficam preservadas mesmo casando commits cross-repo (operador já viu a nota in-prosa e decidiu).
+
+**Renumeração**: o que era `#### 3c. Caso degenerado` virou `#### 3d. Caso degenerado`, preservando ordem lexicográfica `3a < 3b < 3c < 3d`. Definição operacional de "rascunho vazio" no novo Step 3d explicitada: "sem nenhum bullet de substância editorial — DONE/Frame/Insight/TODO/WAITING/Mudanças/Direção; entries removidas pelo Step 3c não contam contra".
+
+**Alternativa rejeitada**: annotation marker `(probed YYYY-MM-DDTHH:MMZ)` em cada WAITING — visual mas não preventivo (operador veria marker mas teria que decidir manualmente; surface paralela à do probe atual sem ganho real).
+
+**Trade-off explícito do SSOT in-place** (paralelo a Adendo v0.4.0): a remoção silente da entry **não** entra como `## Transitions` no payload do CLI; write engine (`mb journal-close`) não recebe a remoção como transição mecânica. Auditabilidade pós-fato (re-run, dedup, retroatividade) depende inteiramente da nota in-prosa pré-preview + judgment do operador no `AskUserQuestion`. Trade-off aceito conscientemente — entries WAITING/TODO no rascunho recém-composto são state efêmero pré-write, não merecem footprint bidirecional cross-repo coerente com a filosofia "SSOT in-place do journal não recebe footprint do probe cross-repo".
+
+Sem ADR novo. Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério, **4 critérios satisfeitos**: (i) decisão central da Sub-decisão 3 — "skill `/journal-close` sintetiza sessão CC em bloco no journal de hoje" — intacta; (ii) sem categoria nova de decisão — refinamento aditivo dentro do fluxo de composição (Step 3.x) sem alterar Steps 1/2/4/5; (iii) sem restrição externa nova — probe interno via `git log` padrão em cwds locais já versionados; (iv) refinamento explicativo + mecânico (forma de validação pré-preview, não objeto produzido).
+
+**Cross-ref:** issue [`#8`](../../../issues/8) (linha original do `BACKLOG.md ## Próximos` migrada para forge per [ADR-058 § (i)](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-058-role-backlog-aceitar-forge.md) do toolkit em 2026-06-20, commit `2c31302`); cross-repo `meta-system/.claude/local/NOTES.md` § 2026-06-19T16:02:54Z (6ª instância) + § 2026-06-20 (probe completo kl-score com verificação retroativa).
+
 ### Sub-decisão 4 — `/init-logseq-project` extraction + idempotência
 
 Skill `skills/init-logseq-project/SKILL.md`. Frontmatter:
