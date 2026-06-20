@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0 — 2026-06-20
+
+### Added
+
+- **`paths.backlog: forge` declarado** — migração das 6 entries de `BACKLOG.md ## Próximos` para issues abertas sem assignee (#8–#13). Combinação `forge + plans_dir: local` fora da recusa cross-mode do ADR-047 (modo forge é público por construção — ADR-058 § (i) do toolkit). `BACKLOG.md ## Concluídos` preservado como histórico append-only.
+- **`/journal-close` Step 3c: probe externo cross-repo de "Próximos passos"** ([PR #14](https://github.com/fppfurtado/meta-bridge/pull/14)). Novo sub-step entre 3b e 3d (Caso degenerado renumerado): identificar pares `(entry, repo)` em rascunho via regex em 3 patterns + `git log --since="48 hours ago"` cross-cwd fail-soft + matching semântico conservador in-skill per ADR-002 § Decisão 3 + remoção silente + nota in-prosa segmentada por repo pré-Step 4 preview. Adendo v0.4.4 em ADR-001 § Sub-decisão 3 documenta 4 critérios ADR-034 + trade-off explícito SSOT in-place (remoção não vai em payload `## Transitions` do CLI). Materializa preventivamente a 7ª instância empírica do memory `feedback_probe_estado_externo_antes_framing` — sai do regime "memória resolve" e entra em "skill resolve mecanicamente". 6 findings do prompt-reviewer + 1 do doc-reviewer absorvidos/cutucados pré-commit (drift cross-ref `matching-on-skill → Decisão 3` reconciliado em 3 sites como side-effect).
+
+### Notes
+
+- **Reconciliação editorial pós-migração forge** — prosa do `CLAUDE.md` (Pragmatic Toolkit) atualizada para refletir a combinação `backlog: forge + plans_dir: local` (anteriormente citava `backlog: canonical + plans_dir: local`). Ancora em ADR-058 § (i) que codifica a exceção à recusa cross-mode do ADR-047 para modo forge.
+
 ## 0.9.3 — 2026-06-18
 
 ### Fixed
