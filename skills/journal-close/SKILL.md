@@ -10,7 +10,7 @@ Thin orchestrator do subcomando `mb journal-close` (CLI `meta-bridge`). Skill co
 
 Substância editorial (matching semântico, princípios de granularidade, filtros) é **heurístico-semântica** e **fica integralmente na skill**. CLI vira write engine — recebe payload via stdin e aplica writes sem refazer judgment.
 
-Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 3 (+ Adendos v0.3.0/v0.4.0/v0.4.1) e [ADR-002](../../docs/decisions/ADR-002-materializacao-cli-mb.md) § matching-on-skill.
+Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 3 (+ Adendos v0.3.0/v0.4.0/v0.4.1) e [ADR-002](../../docs/decisions/ADR-002-materializacao-cli-mb.md) § Decisão 3.
 
 ## Argumentos
 
@@ -117,20 +117,46 @@ Pra cada marker do Step 2.5, agente julga se trabalho da sessão fechou:
 
 Resultado: lista de transições `(source-path, source-line, marker→DONE|CANCELLED)`.
 
-#### 3c. Caso degenerado
+#### 3c. Probe externo cross-repo de "Próximos passos"
 
-Rascunho vazio + transições vazias → recusa silenciosa.
+Refinamento preventivo contra entries WAITING/TODO forward-looking stale no rascunho recém-composto. Step 2.5 + Step 3b probam TODOs do journal contra DONEs da sessão; este step proba WAITINGs/TODOs cross-repo **do rascunho** contra estado **atual** dos repos cross-ref'd. Gap original surfou via drift in vivo (sessão `remote-control` 2026-06-19) — ver ADR-001 § Sub-decisão 3 Adendo v0.4.4.
+
+1. **Identificar pares `(entry, repo)`** no rascunho — para cada WAITING/TODO cuja linha (ou cujo sub-bullet imediato) contém ref cross-repo casando um dos 3 patterns alternativos:
+   - `cwd <repo>` (forma comum em "Próximos passos" do template humano-amigável)
+   - `~/Projects/<repo>` (path-explícito)
+   - `[[fppfurtado/<repo>...]]` (page-link Logseq)
+
+   Entries sem ref cross-repo ficam fora do probe. Lista de repos derivada dos pares é de-duplicada para o sub-passo 2.
+
+2. **Para cada repo identificado** rodar `git log --since="48 hours ago" --oneline -15` com cwd absoluto `$HOME/Projects/<repo>`.
+   - **Fail-soft** (cwd inexistente, não-git, permissão etc.): reportar in-prosa pré-Step 4 `git log falhou em <repo>: <erro literal> — prosseguindo sem probe deste repo` e seguir. Sem skip silente — operador ciente sem bloqueio.
+
+3. **Matching semântico in-skill** (per ADR-002 § Decisão 3) entre cada WAITING/TODO cross-repo do rascunho e os commit subjects retornados. Judgment **conservador** (alinhado a Step 3b: "incerto → não propor transição"); cross-refs explícitos no sub-bullet do WAITING (commit hash, plan slug, `[[page]]`) valem como hint forte.
+
+4. **Match found → remoção silente da entry do rascunho** + **nota in-prosa pré-Step 4 preview**, segmentada por repo quando multi-repo:
+   - Single repo, 1 entry: `Step 3c removeu 1 entry cross-repo stale: <entry literal> [fechada por <repo> commit <hash>: <subject>]`.
+   - Multi-repo: `Step 3c removeu N entries cross-repo stale: [<repo-a>] <entryA> [fechada por commit <hashA>: <subjectA>]; [<repo-b>] <entryB> [fechada por commit <hashB>: <subjectB>]`.
+
+**Composição das notas in-prosa do Step 3c**: emitidas como bloco único pré-`AskUserQuestion` do Step 4, na ordem `falhas primeiro → remoções depois`, cada evento como bullet separado. Sessão multi-repo onde 1 repo falha e outro tem match gera 2 bullets no mesmo bloco; sessões com múltiplas falhas ou múltiplos matches preservam 1 bullet por evento.
+
+Step 4 preview vê rascunho já resolvido (entries stale ausentes) e recebe explicitamente a nota in-prosa do 3c como terceiro substantivo apresentado; operador inspeciona a nota e pode reverter via `Edita via Other` se discordar (ex.: "reincluir entry X — o commit não fechou de fato").
+
+**Trade-off explícito do SSOT in-place** (paralelo a Adendo v0.4.0): a remoção **não** entra como `## Transitions` no payload do CLI; write engine não vê a remoção como transição mecânica. Auditabilidade pós-fato depende inteiramente da nota in-prosa + judgment do operador no AskUserQuestion. Coerente com filosofia "SSOT in-place do journal não recebe footprint do probe cross-repo".
+
+#### 3d. Caso degenerado
+
+Rascunho vazio (sem nenhum bullet de substância editorial — DONE/Frame/Insight/TODO/WAITING/Mudanças/Direção) + transições vazias → recusa silenciosa. Entries removidas pelo Step 3c não contam contra (já saíram do rascunho).
 
 ### 4. Preview-first via AskUserQuestion (skill)
 
-Apresentar rascunho + transições em prosa. `AskUserQuestion` header `Rascunho`:
+Apresentar 3 substantivos em prosa antes do enum: (a) rascunho composto pelo Step 3a, (b) transições do Step 3b, (c) **nota in-prosa do Step 3c** quando presente (probe externo cross-repo emitiu falhas ou remoções). `AskUserQuestion` header `Rascunho`:
 - `Confirma rascunho + transições`.
 - `Edita via Other` — operador descreve ajuste.
 - `Sem substância — não escrever`.
 
 **Dispatch por opção**:
 - `Confirma` → seguir Step 5.
-- `Edita via Other` → re-compor Step 3a/3b absorvendo o ajuste; voltar para Step 4 com rascunho atualizado.
+- `Edita via Other` → re-compor Step 3a/3b absorvendo o ajuste; **Step 3c não re-roda na re-composição** (probe é one-shot por invocação — operador já viu a nota in-prosa e decidiu; entries reintroduzidas via Other ficam preservadas mesmo casando commits cross-repo); voltar para Step 4 com rascunho atualizado.
 - `Sem substância` → recusa silenciosa, exit clean (Step 5 não dispara).
 
 ### 5. Invocar `mb journal-close` (CLI write engine)
@@ -166,5 +192,6 @@ CLI faz: ordem fixa transitions → find-or-create + dedup por commit hash → a
 - **Não criar seções operacionais cronológicas** — sessão se descreve pela substância editorial, não pela cronologia.
 - Não inflar narrativa — brevidade vence completude quando substância é magra.
 - Não 3ª pessoa formal robótica — linguagem 2ª pessoa quando faz sentido editorial.
+- **Não bloquear o fluxo em falha de `git log` cross-repo no Step 3c** — fail-soft com warning visível pré-Step 4 preserva probe parcial sem custo de interrupção. Operador ciente do gap de cobertura sem perder a síntese de hoje.
 - Não fazer commit em logseq-notes — repo de notes tem ciclo próprio.
 - Não auto-fechar plan ativo (`/run-plan`-style done) — `/journal-close` é registro de sessão, não fechamento de plano.
