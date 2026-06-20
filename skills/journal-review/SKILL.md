@@ -57,13 +57,23 @@ Finding: `(source-path, source-line, marker original → DONE)`.
 
 Pra cada marker ativo: idade > T dias (T=21 default, override via `--zombie-days N`) + zero DONE relacionado + zero referência em narrativa. Finding: archive (DONE) ou cancel (CANCELLED) — operador escolhe.
 
-#### 2c. Heurística 3 — `bucket-underused` (report-only)
+#### 2c. Heurística 3 — `bucket-underused` (apply A2 aditiva)
 
-Pra cada bucket no inventário: aparece em < K journals (K=2 default, override via `--bucket-min-journals N`) E < M tasks abertas (M=2 default, override via `--bucket-min-tasks N`). Finding com sugestão archive/fund — apply manual via Edit/Write.
+Pra cada bucket no inventário: aparece em < K journals (K=2 default, override via `--bucket-min-journals N`) E < M tasks abertas (M=2 default, override via `--bucket-min-tasks N`).
 
-#### 2d. Heurística 4 — `bucket-emerging` (report-only)
+**Apply A2 aditiva** (per ADR-001 SD10 Adendo v0.4.0): skill julga **categoria-page agregadora** via critério mecanizável: (i) ≥2 buckets compartilham **prefixo comum** (ex.: `tjpa-*`, `meta-*`) → categoria = prefixo; (ii) buckets compartilham **domínio semântico óbvio sem prefixo** (ex.: `#tjpa` + `#scripts-judiciais` + `#connector-pje-mandamus-tjpa` → `judiciario`) → categoria nomeada pelo agente; (iii) **ambíguo** (bucket isolado, sem família ou domínio claro) → fallback `archived-buckets` (catch-all). Operador override via cherry-pick em Step 3.
 
-Hashtag/conceito em narrativas (≥ N=4 menções default, override via `--emerging-min-mentions N`) que NÃO existe como bucket top-level. Finding com sugestão criar bucket — apply manual.
+Finding emite `(bucket-name, categoria-page-proposta, refs cross-journals)`. Apply em `pages/<categoria>.md`: find-or-create + append entry com block-refs aos journals onde bucket aparece. **Journals históricos intactos** — SSOT in-place per ADR-002 SD4 logseq-notes preservado.
+
+Naming canonical da categoria-page: kebab-case lowercase.
+
+#### 2d. Heurística 4 — `bucket-emerging` (apply B2 forward-only)
+
+Hashtag/conceito em narrativas (≥ N=4 menções default, override via `--emerging-min-mentions N`) que NÃO existe como bucket top-level.
+
+**Apply B2 forward-only** (per ADR-001 SD10 Adendo v0.4.0): skill propõe **naming canonical** do bucket emergente (kebab-case lowercase + NFD-strip acentos PT-BR per ADR-002 SD3 do meta-system; ex.: "captação prévia" → `captacao-previa`). Finding emite `(canonical-name, origem-narrativa opcional)`. Apply no journal de hoje: find-or-create bucket top-level + sub-bullet `\t- (origem: <narrativa>)` opcional. **Sem rewrite retroativo** de menções históricas em narrativas — preserva progressão temporal (hashtag categoriza forward; menções anteriores em prosa foram intencionais sem categoria).
+
+Naming sanitização é responsabilidade da skill — CLI consome literal sem re-sanitizar.
 
 **Falsos-positivos heading-style** (ex.: `WAITING Próximos passos`): judgment filtra antes de emitir finding.
 
@@ -71,17 +81,17 @@ Hashtag/conceito em narrativas (≥ N=4 menções default, override via `--emerg
 
 ### 3. Preview-first via AskUserQuestion (skill mantém estado em conversation memory)
 
-Skill apresenta findings agrupados por tipo + evidência inline em prosa. `AskUserQuestion` header `Findings`:
+Skill apresenta findings agrupados por tipo + evidência inline em prosa. Findings das **4 heurísticas** entram no preview (heurísticas 1-2 apply task-level via marker change; heurísticas 3-4 apply estrutural via A2/B2 per ADR-001 SD10 Adendo v0.4.0). `AskUserQuestion` header `Findings`:
 - `Aplicar tudo`.
 - `Cherry-pick via Other` — operador descreve subset em prosa; skill interpreta.
 - `Cancelar`.
 
 **Dispatch por opção**:
-- `Aplicar tudo` → todas as transições das heurísticas 1-2 entram no payload do Step 5.
-- `Cherry-pick via Other` → skill interpreta seleção, monta subset; transições selecionadas entram no Step 5.
-- `Cancelar` → pular Steps 5 e 6 do fluxo de heurísticas (Step 4 wizard residual ainda pode rodar se `--interactive`).
+- `Aplicar tudo` → transições task-level das heurísticas 1-2 + entries estruturais das heurísticas 3-4 entram no payload do Step 5.
+- `Cherry-pick via Other` → skill interpreta seleção, monta subset (task-level e/ou estrutural, qualquer combinação); selecionadas entram no Step 5. **Cherry-pick com seleção vazia** (operador descreve "nenhuma" ou equivalente) → equivalente a `Cancelar`.
+- `Cancelar` → pular Steps 5 e 6 do fluxo de heurísticas. **Se `--interactive` ativo e wizard residual (Step 4) gerou transições**, Step 5 ainda executa com payload restrito ao wizard (sem heurísticas 1-2 nem estrutural). Sem wizard → Step 5 não dispara.
 
-Estado dos findings vive em conversation memory entre a apresentação e a invocação de apply. Skill traduz seleção em transições concretas (paths/linhas/before/after) — **não passa IDs opacos pro CLI** (per F2 design-reviewer absorvido).
+Estado dos findings vive em conversation memory entre a apresentação e a invocação de apply. Skill traduz seleção em transições concretas (paths/linhas/before/after) + entries estruturais concretas (bucket/categoria-page/refs; canonical-name/origem) — **não passa IDs opacos pro CLI** (per F2 design-reviewer absorvido).
 
 ### 4. Wizard residual opt-in (`--interactive`)
 
@@ -97,16 +107,28 @@ Transições do wizard residual (Arquivar/Adiar) entram no **mesmo payload** do 
 
 ### 5. Invocar `mb journal-review --apply` (CLI write engine)
 
-Compor payload unificado contendo (a) transições das heurísticas 1-2 confirmadas no Step 3 + (b) transições do wizard residual do Step 4 (se `--interactive` ativo). Chamada **única** ao CLI:
+**Apply task-level + Apply estrutural via payload `## Structural`** unificados em chamada única. Compor payload contendo (a) transições task-level das heurísticas 1-2 confirmadas no Step 3 + (b) transições do wizard residual do Step 4 (se `--interactive` ativo) + (c) entries estruturais das heurísticas 3-4 confirmadas no Step 3 (per ADR-001 SD10 Adendo v0.4.0). Chamada única ao CLI:
 
 ```
+## Transitions
+
 - <source-path>:<line> | \t- TODO X | \t- DONE X
 - <source-path>:<line> | \t- WAITING Y | \t- DONE Y
+
+## Structural
+
+### Archived buckets
+- <bucket-name> | <categoria-page> | <journal-path>:<line>;<journal-path>:<line>
+
+### Emerging buckets
+- <canonical-name> | <origem-narrativa-opcional>
 ```
 
-`echo "$PAYLOAD" | mb journal-review --apply`. CLI aplica modify-in-place atomic (mesmo TRANSITION_RE + drift detection do `mb journal-close`). Output: count aplicadas + skipped.
+**Heading `## Transitions` é opcional** — CLI aceita transitions bullets top-level sem heading para backward compat de payload v0.3.0 (`## Transitions`-only legacy). Adicionar heading explícito é forma canonical v0.4.0+ para simetria com `## Structural`.
 
-Heurísticas 3-4 não disparam apply automático no MVP.
+`echo "$PAYLOAD" | mb journal-review --apply`. CLI aplica em ordem fixa: transitions primeiro (modify-in-place atomic, mesmo TRANSITION_RE + drift detection do `mb journal-close`); structural depois (apply A2 = append em `pages/<categoria>.md`; apply B2 = find-or-create bucket no journal de hoje + sub-bullet origem opcional). Output: `transitions: X aplicadas, Y skipped` + `structural: A archived + B emerging (S skipped)`.
+
+Sem heurística selecionada via `Cherry-pick` → seção respectiva omitida do payload (vazia silente). Payload completamente vazio → tratado upstream em Step 3 dispatch (short-circuit; não chega aqui).
 
 ### 6. `--write-summary` opcional (skill compõe + invoca `mb journal-close` write)
 
@@ -120,21 +142,22 @@ Heurísticas 3-4 não disparam apply automático no MVP.
 - #journal-review
 	- ## Journal review — YYYY-MM-DD
 		- Janela: <range> (<N> journals)
-		- Heurística 1: <X aplicados, Y rejeitados>
-		- ...
+		- Heurística 1 (task-closure-by-context): <X aplicados, Y rejeitados>
+		- Heurística 2 (task-zombie): <X aplicados, Y rejeitados>
+		- Heurística 3 (bucket-underused): <A archived em pages/<categoria>.md>
+		- Heurística 4 (bucket-emerging): <B emerging no journal de hoje>
 ```
 
 Append no journal de hoje via CLI. Default off — curation é meta-operação invisível.
 
 ### 7. Reportar
 
-Repassar output do `--apply` ao operador + agregado de findings emitidos por heurística + wizard residual count (se `--interactive`).
+Repassar output do `--apply` ao operador (transitions count + structural count) + agregado de findings emitidos por heurística + wizard residual count (se `--interactive`). Em apply estrutural A2, mencionar page agregadora criada/atualizada; em B2, mencionar bucket emergente no journal de hoje.
 
 ## O que NÃO fazer
 
 - **Não duplicar substância de scan/apply** — vive em `meta_bridge.journal_review`.
-- Não fazer apply estrutural de bucket no MVP — heurísticas 3-4 são report-only.
-- Não criar snapshot pré-write no MVP — marker change é single-line atomic idempotente.
+- **Não criar snapshot defensivo XDG cache** — A2 aditiva (append em page agregadora, sem touch em journals históricos) + B2 forward-only (find-or-create no journal de hoje) são safe-by-construction. Transitions task-level (heurísticas 1-2) usam modify-in-place atomic (TRANSITION_RE + drift detection do `mb journal-close`, idempotente single-line); também não precisam de snapshot. Snapshot só faz sentido se apply for destrutivo no sentido cross-file e não-recuperável (per ADR-001 SD10 Adendo v0.4.0).
 - Não propor finding em matches incertos — judgment conservador.
 - Não modificar markers em sub-bullets (≥2 tabs) — prosa contextual.
 - Não capturar `DONE`/`CANCELLED` como reconciliáveis — terminais (ADR-002 do logseq-notes Sub-decisão 4).
