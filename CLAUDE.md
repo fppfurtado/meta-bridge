@@ -55,6 +55,7 @@ These paths are hardcoded in skills. Changing them requires patching the skills,
 <!-- pragmatic-toolkit:config -->
 ```yaml
 paths:
+  backlog: forge  # GitHub issues sem assignee; BACKLOG.md ## Concluídos preservado como histórico (per ADR-058 + migração 2026-06-20)
   version_files: [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", "pyproject.toml", "meta_bridge/__init__.py"]
   changelog: CHANGELOG.md
   plans_dir: local
