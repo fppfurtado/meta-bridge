@@ -62,7 +62,7 @@ paths:
 test_command: null
 ```
 
-`plans_dir: local` declarado em 2026-06-12 a partir do refactor `/weekly-review` → `/journal-review` (modo local per [ADR-047](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-047-modo-local-paths-replicacao-cross-mode.md) do toolkit). Refactors substantivos das skills do bridge moram em `.claude/local/plans/` (gitignored — coerente com filosofia personal-tooling do plugin); planos cross-cutting de orquestração multi-repo continuam morando em [`meta-system`](https://github.com/fppfurtado/meta-system). Combinação `backlog: canonical + plans_dir: local` suportada per ADR-047.
+`plans_dir: local` declarado em 2026-06-12 a partir do refactor `/weekly-review` → `/journal-review` (modo local per [ADR-047](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-047-modo-local-paths-replicacao-cross-mode.md) do toolkit). Refactors substantivos das skills do bridge moram em `.claude/local/plans/` (gitignored — coerente com filosofia personal-tooling do plugin); planos cross-cutting de orquestração multi-repo continuam morando em [`meta-system`](https://github.com/fppfurtado/meta-system). Combinação `backlog: forge + plans_dir: local` declarada em 2026-06-20 via migração das 6 entries de `## Próximos` para [issues abertas sem assignee](https://github.com/fppfurtado/meta-bridge/issues?q=is%3Aopen+is%3Aissue+no%3Aassignee); fica fora da recusa cross-mode do ADR-047 (modo forge é público por construção — ADR-058 § (i)).
 
 ## Histórico
 
