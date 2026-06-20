@@ -33,6 +33,7 @@ from .journal_close import (
     _decode_escapes,
     apply_transition,
 )
+from .journal_note import bootstrap_journal, find_or_create_bucket
 
 
 BUCKET_TOP_RE = re.compile(r"^- #([a-z0-9-]+)($| )")
@@ -41,6 +42,14 @@ BUCKET_TOP_RE = re.compile(r"^- #([a-z0-9-]+)($| )")
 MARKER_RE = re.compile(r"^\t- (TODO|DOING|WAITING|DONE) (.+)$")
 NARRATIVE_RE = re.compile(r"^\t- (?!TODO |DOING |WAITING |DONE )(.+)$")
 SUB_BULLET_RE = re.compile(r"^\t\t")
+
+# Structural apply payload parsing (per ADR-001 SD10 Adendo v0.4.0).
+STRUCTURAL_HEADER_RE = re.compile(r"^## Structural\s*$")
+ARCHIVED_SUBHEADER_RE = re.compile(r"^### Archived buckets\s*$")
+EMERGING_SUBHEADER_RE = re.compile(r"^### Emerging buckets\s*$")
+ARCHIVED_ENTRY_RE = re.compile(r"^- ([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*(.+)$")
+EMERGING_ENTRY_RE = re.compile(r"^- ([^|]+?)(?:\s*\|\s*(.+))?$")
+ARCHIVED_PAGE_SECTION = "- ## Buckets arquivados"
 
 
 def resolve_window(
@@ -225,9 +234,176 @@ def emit_scan_output(
         click.echo("_(none)_")
 
 
+def parse_structural(raw: str) -> tuple[list[dict], list[dict]]:
+    """Parse seção `## Structural` do payload stdin.
+
+    Format:
+        ## Structural
+        ### Archived buckets
+        - bucket-name | categoria-page | path:line;path:line
+        ### Emerging buckets
+        - canonical-name | origem-fonte (opcional)
+
+    Retorna (archived_entries, emerging_entries). Cada entry é dict.
+    Section ausente → ambos vazios.
+    """
+    archived: list[dict] = []
+    emerging: list[dict] = []
+    in_structural = False
+    current_sub: str | None = None
+    for line in raw.splitlines():
+        if STRUCTURAL_HEADER_RE.match(line):
+            in_structural = True
+            current_sub = None
+            continue
+        if line.startswith("## ") and in_structural:
+            # Saiu da seção Structural pra outra ## section
+            in_structural = False
+            current_sub = None
+            continue
+        if not in_structural:
+            continue
+        if ARCHIVED_SUBHEADER_RE.match(line):
+            current_sub = "archived"
+            continue
+        if EMERGING_SUBHEADER_RE.match(line):
+            current_sub = "emerging"
+            continue
+        if current_sub == "archived":
+            m = ARCHIVED_ENTRY_RE.match(line)
+            if m:
+                bucket = m.group(1).strip()
+                categoria = m.group(2).strip()
+                refs_raw = m.group(3).strip()
+                refs = [r.strip() for r in refs_raw.split(";") if r.strip()]
+                archived.append(
+                    {"bucket": bucket, "categoria": categoria, "refs": refs}
+                )
+        elif current_sub == "emerging":
+            m = EMERGING_ENTRY_RE.match(line)
+            if m:
+                canonical = m.group(1).strip()
+                origem = (m.group(2) or "").strip() or None
+                emerging.append({"canonical": canonical, "origem": origem})
+    return archived, emerging
+
+
+def apply_archived_bucket(
+    bucket: str, categoria: str, refs: list[str]
+) -> tuple[bool, str]:
+    """Append archived bucket entry em pages/<categoria>.md.
+
+    Idempotente: bucket name já presente em qualquer linha da page → no-op
+    (escopo amplo intencional — evita duplicar mesmo que a menção anterior
+    seja narrativa fora da seção arquivados).
+    Fail-soft: refs com path inexistente são skipped (warning no motivo);
+    entry é gravada com refs válidos restantes. Zero refs válidos → entry
+    ainda é gravada (apenas o nome do bucket).
+    """
+    page = _paths.page_path(categoria)
+    bucket_marker = f"#{bucket}"
+    if page.exists():
+        existing = page.read_text()
+        bucket_word_re = re.compile(
+            rf"(?:^|[\s])#{re.escape(bucket)}(?:$|[\s])", re.MULTILINE
+        )
+        if bucket_word_re.search(existing):
+            return False, f"bucket {bucket_marker} já mencionado em pages/{categoria}.md"
+        lines = existing.splitlines()
+    else:
+        lines = []
+
+    valid_refs: list[str] = []
+    skipped_refs: list[str] = []
+    for ref in refs:
+        m = re.match(r"^(.+?):(\d+)$", ref)
+        if m and Path(m.group(1)).exists():
+            valid_refs.append(ref)
+        else:
+            skipped_refs.append(ref)
+
+    # Find-or-create section `- ## Buckets arquivados`
+    section_idx: int | None = None
+    for idx, line in enumerate(lines):
+        if line.strip() == ARCHIVED_PAGE_SECTION.strip():
+            section_idx = idx
+            break
+    if section_idx is None:
+        if lines and lines[-1] != "":
+            lines.append("")
+        lines.append(ARCHIVED_PAGE_SECTION)
+        section_idx = len(lines) - 1
+
+    # Avança enquanto for child indent ou blank entre children; para antes
+    # da próxima top-level (linha não-tab non-blank — outra `- ##` seção, etc.).
+    insert_at = section_idx + 1
+    while insert_at < len(lines) and (
+        lines[insert_at].startswith("\t") or lines[insert_at] == ""
+    ):
+        if lines[insert_at] == "" and insert_at + 1 < len(lines) and not lines[insert_at + 1].startswith("\t"):
+            break
+        insert_at += 1
+
+    new_block = [f"\t- {bucket_marker}"]
+    for ref in valid_refs:
+        new_block.append(f"\t\t- {ref}")
+    lines[insert_at:insert_at] = new_block
+    page.write_text("\n".join(lines) + "\n")
+
+    msg = f"appended {bucket_marker} → pages/{categoria}.md ({len(valid_refs)} refs"
+    if skipped_refs:
+        msg += f", {len(skipped_refs)} skipped: {','.join(skipped_refs)}"
+    msg += ")"
+    return True, msg
+
+
+def apply_emerging_bucket(canonical: str, origem: str | None) -> tuple[bool, str]:
+    """Find-or-create bucket #<canonical> no journal de hoje (forward-only).
+
+    Reusa `find_or_create_bucket` de journal_note. Bootstrap journal se ausente.
+    Idempotente: bucket existente → find-or-create é no-op + sub-bullet origem
+    é gravado uma única vez (dedup por igualdade textual).
+    """
+    today_iso = datetime.date.today().isoformat()
+    today_filename = today_iso.replace("-", "_")
+    journal = _paths.journal_path(today_filename)
+
+    if not journal.exists():
+        bootstrap_journal(journal)
+
+    bucket_idx = find_or_create_bucket(journal, canonical)
+
+    if origem:
+        lines = journal.read_text().splitlines()
+        origem_line = f"\t- (origem: {origem})"
+        # Para no próximo top-level (linha não-tab) — sub-bullets de buckets
+        # subsequentes não devem contaminar dedup deste bucket.
+        already = False
+        for j in range(bucket_idx + 1, len(lines)):
+            if not lines[j].startswith("\t"):
+                break
+            if lines[j].strip() == origem_line.strip():
+                already = True
+                break
+        if not already:
+            lines.insert(bucket_idx + 1, origem_line)
+            journal.write_text("\n".join(lines) + "\n")
+
+    suffix = f" (origem: {origem})" if origem else ""
+    return True, f"#{canonical} em {journal.name}{suffix}"
+
+
 def run_apply_mode() -> None:
-    """Read transitions from stdin (same format as journal-close), apply."""
+    """Read payload from stdin (transitions + optional structural), apply.
+
+    Payload supports:
+    - `- <path>:<line> | <before> | <after>` (legacy task-level transitions)
+    - `## Structural` section with `### Archived buckets` + `### Emerging buckets`
+      (apply estrutural per ADR-001 SD10 Adendo v0.4.0)
+    """
     raw = sys.stdin.read()
+    # TRANSITION_RE casa toda linha do payload independente de seção; entries
+    # archived/emerging têm 3+/2 campos sem `:linha`, não colidem com o pattern.
     transitions: list[tuple[str, int, str, str]] = []
     for line in raw.splitlines():
         m = TRANSITION_RE.match(line)
@@ -241,26 +417,65 @@ def run_apply_mode() -> None:
                 )
             )
 
-    if not transitions:
+    archived, emerging = parse_structural(raw)
+
+    if not transitions and not archived and not emerging:
         click.echo(
-            "--apply: nenhuma transição parseável (stdin vazio ou formato inválido). Formato:",
+            "--apply: nenhuma transição nem entry structural parseável (stdin vazio ou formato inválido). Formatos:",
             err=True,
         )
         click.echo("  - <path>:<line> | <before> | <after>", err=True)
+        click.echo("  ## Structural / ### Archived buckets / - bucket | categoria | refs", err=True)
+        click.echo("  ## Structural / ### Emerging buckets / - canonical | origem", err=True)
         sys.exit(1)
 
-    applied = 0
-    skipped: list[tuple[str, int, str]] = []
+    # Transitions primeiro (preserva semântica v0.3.0), structural depois
+    applied_tr = 0
+    skipped_tr: list[tuple[str, int, str]] = []
     for path_str, lineno, before, after in transitions:
         ok, motivo = apply_transition(Path(path_str), lineno, before, after)
         if ok:
-            applied += 1
+            applied_tr += 1
         else:
-            skipped.append((path_str, lineno, motivo))
+            skipped_tr.append((path_str, lineno, motivo))
 
-    click.echo(f"transitions: {applied} aplicadas, {len(skipped)} skipped")
-    for path_str, lineno, motivo in skipped:
-        click.echo(f"  skipped {path_str}:{lineno} — {motivo}", err=True)
+    applied_arch = 0
+    skipped_arch: list[tuple[str, str]] = []
+    for entry in archived:
+        ok, motivo = apply_archived_bucket(
+            entry["bucket"], entry["categoria"], entry["refs"]
+        )
+        if ok:
+            applied_arch += 1
+            click.echo(f"  archived: {motivo}")
+        else:
+            skipped_arch.append((entry["bucket"], motivo))
+
+    applied_emerg = 0
+    skipped_emerg: list[tuple[str, str]] = []
+    for entry in emerging:
+        ok, motivo = apply_emerging_bucket(entry["canonical"], entry["origem"])
+        if ok:
+            applied_emerg += 1
+            click.echo(f"  emerging: {motivo}")
+        else:
+            skipped_emerg.append((entry["canonical"], motivo))
+
+    if transitions:
+        click.echo(
+            f"transitions: {applied_tr} aplicadas, {len(skipped_tr)} skipped"
+        )
+        for path_str, lineno, motivo in skipped_tr:
+            click.echo(f"  skipped {path_str}:{lineno} — {motivo}", err=True)
+    if archived or emerging:
+        click.echo(
+            f"structural: {applied_arch} archived + {applied_emerg} emerging"
+            f" ({len(skipped_arch) + len(skipped_emerg)} skipped)"
+        )
+        for bucket, motivo in skipped_arch:
+            click.echo(f"  skipped archived #{bucket} — {motivo}", err=True)
+        for canonical, motivo in skipped_emerg:
+            click.echo(f"  skipped emerging #{canonical} — {motivo}", err=True)
 
 
 @cli.command("journal-review")
