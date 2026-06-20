@@ -376,11 +376,15 @@ def apply_emerging_bucket(canonical: str, origem: str | None) -> tuple[bool, str
     if origem:
         lines = journal.read_text().splitlines()
         origem_line = f"\t- (origem: {origem})"
-        already = any(
-            lines[j].strip() == origem_line.strip()
-            for j in range(bucket_idx + 1, len(lines))
-            if lines[j].startswith("\t")
-        )
+        # Para no próximo top-level (linha não-tab) — sub-bullets de buckets
+        # subsequentes não devem contaminar dedup deste bucket.
+        already = False
+        for j in range(bucket_idx + 1, len(lines)):
+            if not lines[j].startswith("\t"):
+                break
+            if lines[j].strip() == origem_line.strip():
+                already = True
+                break
         if not already:
             lines.insert(bucket_idx + 1, origem_line)
             journal.write_text("\n".join(lines) + "\n")
