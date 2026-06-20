@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.11.0 — 2026-06-20
+
+### Added
+
+- **`/journal-review` v0.4.0 — apply estrutural automático (heurísticas 3-4)** ([PR #15](https://github.com/fppfurtado/meta-bridge/pull/15)). Heurísticas `bucket-underused` + `bucket-emerging` saem de report-only e ganham apply estrutural automático per ADR-001 § Sub-decisão 10 Adendo v0.4.0: **A2 aditiva** (`bucket-underused` → page agregadora `pages/<categoria>.md` com section `- ## Buckets arquivados` + entry + children por ref; categoria via critério mecanizável prefixo comum | domínio óbvio | fallback `archived-buckets`; journals históricos intactos — SSOT in-place per `logseq-notes` ADR-002 SD4 preservado) + **B2 forward-only** (`bucket-emerging` → bucket top-level no journal de hoje com naming canonical kebab-case lowercase per `logseq-notes` ADR-002 SD3 + sub-bullet `\t- (origem: ...)` opcional; sem rewrite retroativo). Payload `## Structural` paralelo a `## Transitions` legacy; backward compat preservado (regression test cobre `## Transitions`-only). Snapshot defensivo XDG cache dispensado por construção (apply aditivo + forward-only não-destrutivos); reabertura conjunta com A1/B1 se gatilho destrutivo emergir.
+
+### Fixed
+
+- **`apply_emerging_bucket` dedup origem vazava entre buckets** (qa-reviewer Gap 5 do PR #15). Loop não tinha break ao encontrar próximo top-level — sub-bullets de buckets subsequentes contaminavam dedup do bucket corrente. Fix adiciona break ao encontrar linha não-tab; regression test `test_emerging_origem_dedup_does_not_leak_across_buckets` cobre re-introdução.
+
+### Notes
+
+- **23 testes pytest formais** em `tests/test_journal_review_apply_structural.py` per ADR-002 § Decisão 6 Adendo (parsing-complexo → pytest): parser, apply A2/B2 (idempotência + fail-soft), payload misto, regression `## Transitions`-only legacy, bug Gap 5 regression.
+- **README** atualizado mencionando apply estrutural A2/B2 + correção pré-existente de sub-decisões count em `## Architecture context` (10 → 11 pós-Onda 2 `wiki-compile`).
+
 ## 0.10.0 — 2026-06-20
 
 ### Added
