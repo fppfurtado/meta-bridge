@@ -178,6 +178,24 @@ def apply_transition(
     return True, ""
 
 
+def upsert_bucket_closed_property(
+    journal_path: Path, bucket: str, timestamp: str
+) -> None:
+    """Inserir ou atualizar property `closed:: <timestamp>` imediatamente após o
+    bullet `- #<bucket>`. Idempotente — replace se já presente, insert senão.
+    Consumido pelo hook block-flow enrich downstream (SD12) como signal de
+    'bucket recém-fechado' (SSOT in-place per logseq-notes ADR-002 SD4)."""
+    bucket_idx = find_or_create_bucket(journal_path, bucket)
+    lines = journal_path.read_text().splitlines()
+    prop_line = f"\tclosed:: {timestamp}"
+    next_idx = bucket_idx + 1
+    if next_idx < len(lines) and lines[next_idx].startswith("\tclosed:: "):
+        lines[next_idx] = prop_line
+    else:
+        lines.insert(next_idx, prop_line)
+    journal_path.write_text("\n".join(lines) + "\n")
+
+
 def append_to_bucket(
     journal_path: Path, bucket: str, children_groups: list[list[str]]
 ) -> tuple[int, int]:
@@ -258,6 +276,9 @@ def journal_close_cmd() -> None:
         journal_path.parent.mkdir(parents=True, exist_ok=True)
         if not journal_path.exists():
             bootstrap_journal(journal_path)
+        closed_ts = datetime.datetime.now(datetime.timezone.utc).isoformat(
+            timespec="seconds"
+        )
         for bucket_name, children in parse_buckets(append_md):
             groups = parse_child_groups(children)
             if not groups:
@@ -265,6 +286,7 @@ def journal_close_cmd() -> None:
             appended, ded = append_to_bucket(journal_path, bucket_name, groups)
             if appended or ded:
                 buckets_touched.append(bucket_name)
+                upsert_bucket_closed_property(journal_path, bucket_name, closed_ts)
             appended_total += appended
             dedup_total += ded
 

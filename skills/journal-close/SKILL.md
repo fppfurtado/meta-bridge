@@ -177,7 +177,7 @@ Compor payload markdown estruturado e pipe via stdin:
 
 `echo "$PAYLOAD" | mb journal-close`. Output reporta journal/buckets/transitions/dedup — repassar ao operador.
 
-CLI faz: ordem fixa transitions → find-or-create + dedup por commit hash → append children. Bootstrap journal se ausente. Sem annotation extra (SSOT in-place per ADR-002 do logseq-notes Sub-decisão 4).
+CLI faz: ordem fixa transitions → find-or-create + dedup por commit hash → append children → upsert property `closed:: <ISO UTC>` no bucket recém-tocado (idempotente: replace se property presente, insert senão; disparo per bucket com appended>0 OR dedup>0; mensageiro pro consumer downstream — Sub-decisão 12 pendente per Bloco 5 do plan onda-5-hook-enrich-blocks). Bootstrap journal se ausente. Sem annotation extra (SSOT in-place per ADR-002 do logseq-notes Sub-decisão 4).
 
 ## O que NÃO fazer
 
