@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.0 — 2026-06-21
+
+### Added
+
+- **`/enrich-blocks` skill + `suggest_enrich_blocks` hook + Sub-decisão 12** ([PR #20](https://github.com/fppfurtado/meta-bridge/pull/20)). 7ª skill `/enrich-blocks` (knowledge layer Camada 2a Enriched Blocks) + sub-tool determinístico standalone `skills/enrich-blocks/sub-tools/enrich.py` (pattern SD11 — orquestrador heurístico + sub-tool determinístico) + 3º hook bridging `suggest_enrich_blocks.py` (Stop event categoria operacional nova per ADR-001 SD12: hook como trigger de background write substantivo via `Popen(start_new_session=True)`; distinta de SD6 soft notification). Triple gate auto-gating (`.claude/local/` + `CLAUDE_PLUGIN_ROOT`+sub-tool + Logseq closed) + trigger detection (journal de hoje com bucket `closed::` recente sem `provenance::`). Materializa Onda 5 Faceta 1 do roadmap knowledge-layer block-first do meta-system. ADR-034 mecanicamente forçou SD12 nova (3 de 4 critérios pra Adendo SD6 falham).
+- **Property `closed:: <ISO UTC>` emit em `mb journal-close`** (Adendo SD3 ADR-001). Write engine faz upsert de property `closed::` no bucket recém-tocado (appended >0 OR dedup >0). Idempotente (replace se presente, insert senão). Marker SSOT in-place per `logseq-notes` ADR-002 SD4 — consumido pelo hook block-flow enrich downstream.
+
+### Notes
+
+- **9 testes pytest formais** em `tests/test_enrich_blocks.py` cobrindo: idempotência, bucket vazio, journal ausente, matching contra Project Pages, page-link sem double brackets, dedup mention, regression cross-bucket contamination (lição NOTES 2026-06-20), atomic write design.
+- **Capturas backlog forge**: #17 (`suggest_journal_close.py` defesa `isinstance`), #18 (Onda 5 Faceta 2 daemon source-flow), #19 (Onda 5 Faceta 3 `/wiki-lint`).
+- **`README.md` + `CLAUDE.md`** atualizados: 7 skills + 3 hooks bridging; entries `/enrich-blocks` + `suggest_enrich_blocks` na tabela; `/journal-close` menciona `closed::` emit. ADR-001 § Consequências bumped de "10 sub-decisões / 5 skills + hook" para "12 sub-decisões / 7 skills + 3 hooks bridging".
+
 ## 0.11.0 — 2026-06-20
 
 ### Added
