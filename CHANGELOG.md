@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.0 — 2026-06-22
+
+### Added
+
+- **`/inbox-aggregate` expansão non-task** (Bloco 2 [#41](https://github.com/fppfurtado/meta-system/issues/41)). Step 4 do SKILL.md ganha grep adicional `^\t+- (?!TODO|DOING|WAITING).*#inbox` (indentação `\t+` exclui Papel 1 top-level). Sub-tool expandido: `parse_pkm_non_tasks`, `content_key` para dedup cross-type (strip marker prefix antes de comparar), campo `type` por item no JSON de saída (`forge`/`pkm_task`/`pkm_non_task`), `--pkm-non-tasks` arg, contadores separados `count_pkm_task` + `count_pkm_non_task` (backward compat via `count_pkm` total). 14 testes novos (cenários 9-11); 44 total.
+
 ## 0.13.1 — 2026-06-22
 
 ### Fixed

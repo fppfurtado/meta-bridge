@@ -8,7 +8,7 @@ disable-model-invocation: false
 
 Skill orquestrador per [ADR-001 meta-bridge](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 1 (bridge read-N-sources → write-to-logseq; análogo a `/wiki-compile`). View efêmera — cada invocação re-agrega; idempotência via dedup exact-match no sub-tool.
 
-Schema canonical em [logseq-notes ADR-004](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-004-inbox-aggregator-schema.md) (3 sub-decisões: `#inbox` inline Papel 2a, hashtags de fonte inline `#<repo>`, query canonical simple-query). Sub-tool determinístico (parse + dedup + write) em `sub-tools/inbox_aggregate.py` per [ADR-002 Adendo](../../docs/decisions/ADR-002-materializacao-cli-mb.md) critério "parsing-complexo → pytest".
+Schema canonical em [logseq-notes ADR-004](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-004-inbox-aggregator-schema.md) (4 sub-decisões: `#inbox` inline Papel 2a para qualquer bloco — task ou non-task, hashtags de fonte inline `#<repo>`, query canonical, view Inbox.md duas seções). Sub-tool determinístico (parse + dedup + write) em `sub-tools/inbox_aggregate.py` per [ADR-002 Adendo](../../docs/decisions/ADR-002-materializacao-cli-mb.md) critério "parsing-complexo → pytest".
 
 ## Argumentos
 
@@ -56,7 +56,7 @@ Falha de glab (exit não-0, `glab` ausente, problema de autenticação) → pula
 
 Acumular em `forge_map`: `{"#pje-2.1": [{"iid": N, "title": "..."}], ...}`.
 
-### 4. Grep tasks PKM-native do journal de hoje (read-only, isento do gate)
+### 4. Grep blocks PKM-native do journal de hoje (read-only, isento do gate)
 
 Resolver path do journal de hoje:
 
@@ -66,28 +66,38 @@ date +%Y_%m_%d
 
 → `~/Notes/logseq/journals/<YYYY_MM_DD>.md`.
 
-Journal ausente → `pkm_tasks = []` (dia inativo; prosseguir sem PKM tasks).
+Journal ausente → `pkm_tasks = []`, `pkm_non_tasks = []` (dia inativo; prosseguir sem PKM blocks).
 
-Journal presente → grep com regex canonical (per logseq-notes ADR-004 Sub-decisão 1):
+Journal presente → dois greps distintos (per logseq-notes ADR-004 SD1 + Adendo 2026-06-22):
+
+**Tasks PKM-native (com marker GTD):**
 
 ```bash
 grep -P '^\t*- (?:TODO|DOING|WAITING).*#inbox' ~/Notes/logseq/journals/<date>.md
 ```
 
-Capturar linhas como `pkm_tasks` (lista de strings). Regex captura tasks com marker GTD em qualquer nível de indentação; NÃO captura `^- #inbox` top-level bucket sem marker (Papel 1 puro — filtrado naturalmente pela exigência de marker GTD).
+Capturar linhas como `pkm_tasks`. Regex captura tasks com marker GTD em qualquer nível de indentação; NÃO captura `^- #inbox` top-level bucket sem marker (Papel 1 puro).
 
-Nota: o grep captura tasks de qualquer posição no journal, incluindo tasks já escritas dentro do bucket `#inbox` por rodadas anteriores. O sub-tool deduplica via exact-match contra os filhos já presentes no bucket — tasks repetidas são descartadas sem acumulação.
+**Capturas non-task PKM (sem marker GTD, indentadas):**
+
+```bash
+grep -P '^\t+- (?!TODO|DOING|WAITING).*#inbox' ~/Notes/logseq/journals/<date>.md
+```
+
+Capturar linhas como `pkm_non_tasks`. Regex exige `\t+` (1+ tabs) — exclui `^- #inbox` top-level Papel 1 sem indentação. Negative lookahead `(?!TODO|DOING|WAITING)` exclui tasks.
+
+Nota: ambos os greps capturam blocos de qualquer posição no journal, incluindo blocos já escritos no bucket `#inbox` por rodadas anteriores. O sub-tool deduplica via `content_key` (strip do marker prefix antes da comparação) — blocos repetidos e cross-type com mesmo conteúdo são descartados.
 
 ### 5. Gate write: invocar sub-tool OU dry-run report
 
 **Se `logseq_open = true`:**
 
-Reportar ao operador: tasks coletadas (`forge_map` counts + `pkm_tasks` count) + aviso:
+Reportar ao operador: blocks coletados (`forge_map` counts + `pkm_tasks` count + `pkm_non_tasks` count) + aviso:
 
 ```
 Logseq desktop aberto — write bloqueado (ADR-001 Sub-decisão 7).
-Feche Logseq e re-invoque /inbox-aggregate para persistir as tasks abaixo.
-[lista prévia das tasks que seriam escritas]
+Feche Logseq e re-invoque /inbox-aggregate para persistir os itens abaixo.
+[lista prévia das tasks e capturas que seriam escritas]
 ```
 
 Exit clean sem escrever no filesystem do graph.
@@ -100,12 +110,13 @@ Invocar sub-tool determinístico:
 python ${CLAUDE_PLUGIN_ROOT:-~/Projects/meta-bridge}/skills/inbox-aggregate/sub-tools/inbox_aggregate.py \
   --journal ~/Notes/logseq/journals/<date>.md \
   --forge-issues '<forge_map_json>' \
-  --pkm-tasks '<pkm_tasks_json>'
+  --pkm-tasks '<pkm_tasks_json>' \
+  --pkm-non-tasks '<pkm_non_tasks_json>'
 ```
 
 Sub-tool exit não-0 → reportar stderr ao operador; exit clean.
 
-Sub-tool exit 0 → capturar JSON de stdout (`tasks`, `count_forge`, `count_pkm`, `count_new`, `count_deduped`).
+Sub-tool exit 0 → capturar JSON de stdout (`tasks`, `count_forge`, `count_pkm_task`, `count_pkm_non_task`, `count_pkm`, `count_new`, `count_deduped`).
 
 ### 6. Reportar ao operador
 
@@ -113,9 +124,10 @@ Sub-tool exit 0 → capturar JSON de stdout (`tasks`, `count_forge`, `count_pkm`
 Journal: ~/Notes/logseq/journals/<date>.md
 Repos Forge: <N repos>  (<lista de repos elegíveis>)
 Issues Forge carregadas: <count_forge>
-Tasks PKM-native: <count_pkm>
-Tasks novas escritas: <count_new>
-Tasks deduplicadas (já presentes): <count_deduped>
+Tasks PKM-native: <count_pkm_task>
+Capturas non-task PKM: <count_pkm_non_task>
+Itens novos escritos: <count_new>
+Itens deduplicados (já presentes): <count_deduped>
 ```
 
 Avisos de repos com falha glab (Step 3) listados abaixo se houver.

@@ -11,13 +11,19 @@ import sys
 from pathlib import Path
 
 INBOX_BUCKET_RE = re.compile(r"^- #inbox($| )")
+_ITEM_PREFIX_RE = re.compile(r"^\t*-\s+(?:(?:TODO|DOING|WAITING)\s+)?")
 
 
 def normalize(text: str) -> str:
     return text.strip().lower()
 
 
-def parse_forge_issues(issues: list[dict], source_tag: str) -> list[str]:
+def content_key(line: str) -> str:
+    """Dedup key para comparação cross-type: strip indent + bullet + marker opcional, normalize."""
+    return _ITEM_PREFIX_RE.sub("", line).strip().lower()
+
+
+def parse_forge_issues(issues: list[dict], source_tag: str) -> list[dict]:
     """Formata issues Forge como task lines Logseq (Papel 2a per ADR-004 SD1+SD2)."""
     tasks = []
     for issue in issues:
@@ -26,12 +32,14 @@ def parse_forge_issues(issues: list[dict], source_tag: str) -> list[str]:
         if not title:
             continue
         suffix = f" (#{iid})" if iid else ""
-        tasks.append(f"\t- TODO {title}{suffix}  #inbox {source_tag}")
+        tasks.append(
+            {"line": f"\t- TODO {title}{suffix}  #inbox {source_tag}", "type": "forge"}
+        )
     return tasks
 
 
-def parse_pkm_tasks(raw_lines: list[str]) -> list[str]:
-    """Normaliza tasks PKM-native; adiciona #pkm-native se ausente (ADR-004 SD2)."""
+def parse_pkm_tasks(raw_lines: list[str]) -> list[dict]:
+    """Normaliza tasks PKM-native com marker GTD; adiciona #pkm-native se ausente (ADR-004 SD2)."""
     result = []
     for line in raw_lines:
         t = line.rstrip()
@@ -39,17 +47,28 @@ def parse_pkm_tasks(raw_lines: list[str]) -> list[str]:
             continue
         if "#pkm-native" not in t:
             t = t + "  #pkm-native"
-        result.append(t)
+        result.append({"line": t, "type": "pkm_task"})
     return result
 
 
-def dedup(new_tasks: list[str], existing_normalized: set[str]) -> list[str]:
-    """Remove tasks já presentes — exact-match normalizado (ADR-004 SD3)."""
+def parse_pkm_non_tasks(raw_lines: list[str]) -> list[dict]:
+    """Normaliza capturas PKM-native sem marker GTD (ADR-004 SD1 Adendo 2026-06-22)."""
+    result = []
+    for line in raw_lines:
+        t = line.rstrip()
+        if not t:
+            continue
+        result.append({"line": t, "type": "pkm_non_task"})
+    return result
+
+
+def dedup(new_tasks: list[dict], existing_pool: set[str]) -> list[dict]:
+    """Remove tasks já presentes — content_key normalizado, cross-type (ADR-004 SD3)."""
     seen: set[str] = set()
     result = []
     for task in new_tasks:
-        key = normalize(task)
-        if key not in existing_normalized and key not in seen:
+        key = content_key(task["line"])
+        if key not in existing_pool and key not in seen:
             seen.add(key)
             result.append(task)
     return result
@@ -129,7 +148,12 @@ def main() -> int:
     parser.add_argument(
         "--pkm-tasks",
         default="[]",
-        help="JSON array de task lines grep-adas do journal",
+        help="JSON array de task lines grep-adas do journal (com marker GTD)",
+    )
+    parser.add_argument(
+        "--pkm-non-tasks",
+        default="[]",
+        help="JSON array de non-task lines grep-adas do journal (sem marker GTD, indentadas)",
     )
     args = parser.parse_args()
 
@@ -138,6 +162,7 @@ def main() -> int:
     try:
         forge_map: dict[str, list[dict]] = json.loads(args.forge_issues)
         pkm_raw: list[str] = json.loads(args.pkm_tasks)
+        pkm_non_task_raw: list[str] = json.loads(args.pkm_non_tasks)
     except json.JSONDecodeError as exc:
         sys.stderr.write(f"JSON inválido: {exc}\n")
         return 1
@@ -151,23 +176,28 @@ def main() -> int:
         lines = []
 
     existing_children, _ = read_bucket_children(lines)
-    existing_normalized = {normalize(t) for t in existing_children}
+    existing_pool = {content_key(t) for t in existing_children}
 
-    all_tasks: list[str] = []
+    all_tasks: list[dict] = []
     for source_tag, issues in forge_map.items():
         all_tasks.extend(parse_forge_issues(issues, source_tag))
-    all_tasks.extend(parse_pkm_tasks(pkm_raw))
+    pkm_tasks = parse_pkm_tasks(pkm_raw)
+    pkm_non_tasks = parse_pkm_non_tasks(pkm_non_task_raw)
+    all_tasks.extend(pkm_tasks)
+    all_tasks.extend(pkm_non_tasks)
 
     count_forge = sum(len(v) for v in forge_map.values())
-    count_pkm = len(pkm_raw)
+    count_pkm_task = len(pkm_tasks)
+    count_pkm_non_task = len(pkm_non_tasks)
 
-    new_tasks = dedup(all_tasks, existing_normalized)
+    new_tasks = dedup(all_tasks, existing_pool)
     count_new = len(new_tasks)
     count_deduped = len(all_tasks) - count_new
 
     if new_tasks:
+        task_lines = [t["line"] for t in new_tasks]
         lines, bucket_idx = find_or_create_bucket(lines)
-        lines = insert_tasks_after_bucket(lines, bucket_idx, new_tasks)
+        lines = insert_tasks_after_bucket(lines, bucket_idx, task_lines)
         try:
             journal.parent.mkdir(parents=True, exist_ok=True)
             journal.write_text("".join(lines), encoding="utf-8")
@@ -176,9 +206,11 @@ def main() -> int:
             return 1
 
     result = {
-        "tasks": new_tasks,
+        "tasks": [{"line": t["line"], "type": t["type"]} for t in new_tasks],
         "count_forge": count_forge,
-        "count_pkm": count_pkm,
+        "count_pkm_task": count_pkm_task,
+        "count_pkm_non_task": count_pkm_non_task,
+        "count_pkm": count_pkm_task + count_pkm_non_task,
         "count_new": count_new,
         "count_deduped": count_deduped,
     }
