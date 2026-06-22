@@ -22,7 +22,7 @@ Overlap conceitual com `/journal-close`: ambos fecham TODOs por evidência, mas 
 /journal-review --from 2026-05-01 --to 2026-05-31  # range arbitrário
 /journal-review --interactive      # detective + wizard residual após
 /journal-review --write-summary    # detective + bloco summary no journal de hoje
-/journal-review --bucket-min-journals 1 --bucket-min-tasks 1  # mata 2c em janela curta (zero findings)
+/journal-review --bucket-min-journals 1 --bucket-min-tasks 1  # reduz 2c (com OR, só zero findings se nenhum bucket tiver 0 tasks abertas)
 ```
 
 - `--days N` ou `--from/--to`: passados ao CLI (validação lá; mensagens claras).
@@ -59,7 +59,7 @@ Pra cada marker ativo: idade > T dias (T=21 default, override via `--zombie-days
 
 #### 2c. Heurística 3 — `bucket-underused` (apply A2 aditiva)
 
-Pra cada bucket no inventário: aparece em < K journals (K=2 default, override via `--bucket-min-journals N`) E < M tasks abertas (M=2 default, override via `--bucket-min-tasks N`).
+Pra cada bucket no inventário: aparece em < K journals (K=2 default, override via `--bucket-min-journals N`) OU < M tasks abertas (M=2 default, override via `--bucket-min-tasks N`).
 
 **Apply A2 aditiva** (per ADR-001 SD10 Adendo v0.4.0): skill julga **categoria-page agregadora** via critério mecanizável: (i) ≥2 buckets compartilham **prefixo comum** (ex.: `tjpa-*`, `meta-*`) → categoria = prefixo; (ii) buckets compartilham **domínio semântico óbvio sem prefixo** (ex.: `#tjpa` + `#scripts-judiciais` + `#connector-pje-mandamus-tjpa` → `judiciario`) → categoria nomeada pelo agente; (iii) **ambíguo** (bucket isolado, sem família ou domínio claro) → fallback `archived-buckets` (catch-all). Operador override via cherry-pick em Step 3.
 
