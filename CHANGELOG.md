@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.0 — 2026-06-22
+
+### Added
+
+- **`/inbox-aggregate` skill v0 + sub-tool + pytest suite** (Bloco 2 Fase 1 [#18](https://github.com/fppfurtado/meta-system/issues/18)). Skill orquestrador SKILL.md + sub-tool determinístico `inbox_aggregate.py` (parse issues Forge via `glab` + tasks PKM-native `#inbox` inline, dedup exact-match, find-or-create bucket `#inbox`, write ao journal). Gate `pgrep -xi logseq` failure-closed para write; read-only isento per ADR-001 Sub-decisão 9. 30 testes pytest cobrindo parse Forge, parse PKM-native, dedup, find-or-create bucket, edge cases (profundidade 2+, idempotência). Schema per `logseq-notes` ADR-004: hashtag inline `#<repo>` como atribuição de fonte; dedup semântico YAGNI.
+
 ## 0.12.1 — 2026-06-22
 
 ### Fixed
