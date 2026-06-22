@@ -41,12 +41,20 @@ Sem repos elegíveis encontrados → reportar aviso e prosseguir com `forge_map 
 Para cada repo elegível do Step 2:
 
 ```bash
-cd ~/Projects/tjpa/<dirname> && glab issue list --state opened --output json
+cd ~/Projects/tjpa/<dirname> && glab issue list -O json --assignee=@me
 ```
 
-Capturar output JSON. Falha de glab (exit não-0, `glab` ausente, problema de autenticação) → pular repo + registrar aviso no relatório final; não aborta skill.
+`--assignee=@me` filtra issues atribuídas ao operador — backlog pessoal, não todas as issues do projeto (repos de equipe têm centenas de issues de outros membros). Flag `-O json` é a forma correta (não `--output json`).
 
-Acumular em `forge_map`: `{"#pje-2.1": [<issues>], "#scripts-judiciais": [<issues>], ...}`.
+Após capturar o JSON de cada repo, **extrair apenas `iid` + `title`** de cada issue object antes de acumular no `forge_map` — o campo `description` do glab pode ser multi-MB e ultrapassa o limite de argumento CLI do sub-tool:
+
+```python
+slim = [{"iid": i["iid"], "title": i["title"]} for i in issues]
+```
+
+Falha de glab (exit não-0, `glab` ausente, problema de autenticação) → pular repo + registrar aviso no relatório final; não aborta skill.
+
+Acumular em `forge_map`: `{"#pje-2.1": [{"iid": N, "title": "..."}], ...}`.
 
 ### 4. Grep tasks PKM-native do journal de hoje (read-only, isento do gate)
 
