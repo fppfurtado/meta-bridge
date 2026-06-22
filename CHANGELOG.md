@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.1 — 2026-06-22
+
+### Fixed
+
+- SKILL.md Step 3 de `/inbox-aggregate`: glab flags corrigidos (`-O json`, `--assignee=@me`), extração slim `iid`+`title` para evitar limite de argumento CLI com `description` multi-MB.
+
 ## 0.13.0 — 2026-06-22
 
 ### Added

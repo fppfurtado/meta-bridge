@@ -23,7 +23,7 @@
         "ref": "main"
       },
       "homepage": "https://github.com/fppfurtado/meta-bridge",
-      "version": "0.13.0",
+      "version": "0.13.1",
       "tags": [
         "logseq",
         "journal",
@@ -34,5 +34,5 @@
       ]
     }
   ],
-  "version": "0.13.0"
+  "version": "0.13.1"
 }
