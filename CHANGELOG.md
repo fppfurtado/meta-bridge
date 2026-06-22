@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0 — 2026-06-22
+
+### Added
+
+- change bucket-underused predicate AND→OR
+
+### Notes
+
+- add SD10 Adendo v0.3.3 documenting AND→OR calibration; bump plugin.json to 0.14.0 for CC cache invalidation
+
 ## 0.14.0 — 2026-06-22
 
 ### Added
