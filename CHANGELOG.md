@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.1 — 2026-06-22
+
+### Fixed
+
+- isinstance(event, dict) guard em `suggest_journal_close.py` — JSON scalar input (null/string/array) atravessava try/except e quebrava em event.get(). Closes [#17](https://github.com/fppfurtado/meta-bridge/issues/17).
+
+### Notes
+
+- 4 testes pytest em `tests/test_suggest_journal_close.py` cobrindo null/string/array/empty stdin.
+
 ## 0.12.0 — 2026-06-21
 
 ### Added

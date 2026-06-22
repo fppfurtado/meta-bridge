@@ -24,7 +24,15 @@
       },
       "homepage": "https://github.com/fppfurtado/meta-bridge",
       "version": "0.12.0",
-      "tags": ["logseq", "journal", "pkm", "gtd", "bridge", "personal-tooling"]
+      "tags": [
+        "logseq",
+        "journal",
+        "pkm",
+        "gtd",
+        "bridge",
+        "personal-tooling"
+      ]
     }
-  ]
+  ],
+  "version": "0.12.1"
 }
