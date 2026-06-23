@@ -233,7 +233,14 @@ def append_to_bucket(
 
 
 @cli.command("journal-close")
-def journal_close_cmd() -> None:
+@click.option(
+    "--date",
+    "date_override",
+    default=None,
+    metavar="YYYY-MM-DD",
+    help="Escrever no journal do dia especificado em vez de hoje.",
+)
+def journal_close_cmd(date_override: str | None) -> None:
     """Aplica payload de fechamento de sessão lido de stdin (write engine)."""
     fail_if_logseq_open()
 
@@ -265,8 +272,20 @@ def journal_close_cmd() -> None:
         else:
             skipped.append((path_str, lineno, motivo))
 
-    today = datetime.date.today().strftime("%Y_%m_%d")
-    journal_path = _paths.journal_path(today)
+    if date_override is not None:
+        try:
+            d = datetime.date.fromisoformat(date_override)
+        except ValueError as e:
+            raise click.BadParameter(str(e), param_hint="'--date'")
+        date_str = d.strftime("%Y_%m_%d")
+        closed_ts = datetime.datetime(
+            d.year, d.month, d.day, 23, 59, 59
+        ).astimezone().isoformat(timespec="seconds")
+    else:
+        date_str = datetime.date.today().strftime("%Y_%m_%d")
+        closed_ts = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+
+    journal_path = _paths.journal_path(date_str)
 
     buckets_touched: list[str] = []
     appended_total = 0
@@ -276,9 +295,6 @@ def journal_close_cmd() -> None:
         journal_path.parent.mkdir(parents=True, exist_ok=True)
         if not journal_path.exists():
             bootstrap_journal(journal_path)
-        closed_ts = datetime.datetime.now(datetime.timezone.utc).isoformat(
-            timespec="seconds"
-        )
         for bucket_name, children in parse_buckets(append_md):
             groups = parse_child_groups(children)
             if not groups:
