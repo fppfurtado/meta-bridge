@@ -40,7 +40,7 @@ Sem candidatos → recusa silenciosa com `nenhum sub-bullet pendente de enrichme
 
 ### 4. LLM judgment de mention substantiva (substância heurística)
 
-Listar Project Pages canonical em `~/Notes/logseq/pages/*.md` (basename = nome de entidade per ADR-005 do meta-system convention).
+Listar Project Pages canonical em `~/Notes/logseq/pages/*.md` — filtradas por presença de `repo-path::` no conteúdo (discriminante das props mecânicas escritas por `mb init-project` per ADR-001 SD4; basename = nome de entidade per ADR-005 do meta-system convention).
 
 Para cada candidato, identificar:
 - **Mentions literais**: basename presente no texto do sub-bullet OR page-link `[[<basename>]]` inline.
