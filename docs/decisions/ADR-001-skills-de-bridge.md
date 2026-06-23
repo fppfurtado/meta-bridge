@@ -897,6 +897,13 @@ Materializa Onda 5 Faceta 2 do roadmap knowledge layer block-first do meta-syste
 
 **Cross-ref forge**: issue [`#18`](../../../issues/18) (Onda 5 Faceta 2 — sources digestion Camada 2b, materializada nesta Sub-decisão).
 
+**Adendo (2026-06-23) — 3º modo URL via `WebFetch`:** a enumeração "Dois modos da skill" acima ganha aditivamente um **terceiro modo**. **Modo URL** (arg casa `^https?://`): faz fetch da página via tool `WebFetch`, extrai o artigo em markdown, e cria `pages/sources/<slug>.md` (raw source page, `url:: <url>` no lugar de `file::`, `type:: web`) + `pages/<slug>-digested.md` (digested page com **só** `source:: [[sources/<slug>]]` — paridade total com modo arquivo; a URL vive na raw source page, não é repetida na digested). Modo URL não edita o journal (sem bloco de origem; paridade com modo arquivo).
+
+- **Gate de falha graciosa (failure-closed):** página é recurso externo não-controlado. WebFetch erro/timeout/conteúdo vazio → recusa fechada (`fetch falhou para <url> — página inacessível, bloqueio de bot ou conteúdo JS-only`). URL malformada que passa o regex mas o WebFetch rejeita → mesma recusa (catch-all). Conteúdo parcial/paywall → prossegue + marker `<!-- truncado: paywall/fetch parcial -->`; nunca digest silenciosamente incompleto.
+- **Fallback content-filter (escopo: modo URL):** o invariante "conteúdo extraído integral" é relido como "integral quando a content policy permite, senão estruturado-denso". Write verbatim bloqueado pela content filtering policy da API → reescrever estruturado-denso seção-por-seção. Formaliza para o modo URL o workaround antes só anotado em NOTES 2026-06-23 (modo arquivo). **Não generaliza ao modo arquivo nesta revisão** — generalização fica deferida ao gatilho ≥2 fontes confirmando o pattern.
+
+**4 critérios ADR-034 (Adendo vs Sub-decisão nova):** (i) **decisão central da SD13 intacta** — digest LLM-driven sem sub-tool + gate Logseq obrigatório + hook notifier permanecem; modo URL produz o mesmo objeto (raw source + digested pages); (ii) **introduz I/O de rede via `WebFetch` — fronteira externa nova em superfície, mas NÃO nova categoria de substância nem novo write engine** (≠ SD12, promovida a Sub-decisão nova por novo write engine mediado por Popen); o gate de falha graciosa é o contrato que contém a fronteira; (iii) **sem restrição externa nova** — `WebFetch` é tool pré-existente do harness, não dependência adicionada ao pacote nem sub-tool em `sub-tools/`; (iv) **refinamento aditivo** (3º modo + gate) **+ explicativo** (relê o invariante "integral"). Adendo cabe.
+
 ## Consequências
 
 ### Benefícios

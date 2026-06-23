@@ -111,7 +111,8 @@ created:: <hoje YYYY-MM-DD>
 
 - Modo arquivo → `file:: <path-absoluto>` + `type:: <extensão>`. Modo URL → `url:: <url-original>` + `type:: web`.
 - `author::` como page-ref Logseq se o nome é discernível; omitir se desconhecido.
-- **Conteúdo extraído — verbatim com fallback:** tentar o texto integral como markdown (arquivos até 50 páginas; artigo fetchado em modo URL). Se o Write for bloqueado por content filtering policy da API (ocorre com certos conteúdos técnico/financeiros — content filter da API, não da skill), reescrever o conteúdo de forma **estruturada-densa** (seção por seção, resumida, não verbatim) e re-Write; a page resultante mantém estrutura correta (`provenance:: #source`, metadata, seções) com conteúdo comprimido.
+- **Conteúdo extraído:** texto integral como markdown (arquivos até 50 páginas em modo arquivo; artigo fetchado em modo URL).
+- **Fallback content-filter (escopo: modo URL):** se o Write da raw source page for bloqueado por content filtering policy da API (ocorre com certos conteúdos técnico/financeiros — content filter da API, não da skill), reescrever o conteúdo de forma **estruturada-densa** (seção por seção, resumida, não verbatim) e re-Write; a page resultante mantém estrutura correta (`provenance:: #source`, metadata, seções) com conteúdo comprimido. O mesmo bloqueio em modo arquivo segue como workaround ad-hoc (não codificado aqui) — generalização deferida ao gatilho ≥2 fontes confirmando o pattern.
 - **Truncamento:** PDFs >50 páginas (modo arquivo, leitura truncada no Passo 2) → inserir `<!-- truncado: lido até p.50 de N -->` após o conteúdo. Modo URL com fetch parcial/paywall → inserir `<!-- truncado: paywall/fetch parcial -->`.
 
 ### 5. Reasoning LLM — claims e relevância
