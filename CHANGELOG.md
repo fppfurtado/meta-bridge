@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.0 — 2026-06-23
+
+### Added
+
+- **`/source-digest` skill + Stop hook notifier** (Onda 5 Faceta 2 — Camada 2b source-flow): digest de clips do journal + arquivos do filesystem ([#22](https://github.com/fppfurtado/meta-bridge/pull/22)).
+- **`mb journal-close --date`**: flag CLI para escrever em um dia específico do journal ([#26](https://github.com/fppfurtado/meta-bridge/pull/26)).
+- **`/wiki-compile --blocks` opcional**: auto-descoberta de pages-source por `entities::` (Passo 2-bis, pages-only, match literal `[[<entity>]]`); modo cirúrgico preservado ([#28](https://github.com/fppfurtado/meta-bridge/pull/28)).
+
+### Fixed
+
+- **`enrich-blocks` scoping**: `list_project_pages` filtra Project Pages canonical (presença de `repo-path::`) em vez de varrer todas as ~199 páginas do grafo ([#27](https://github.com/fppfurtado/meta-bridge/pull/27)).
+
 ## 0.15.0 — 2026-06-22
 
 ### Added
