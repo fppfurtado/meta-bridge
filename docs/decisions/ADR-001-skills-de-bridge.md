@@ -854,11 +854,39 @@ Materializa Onda 5 Faceta 1 do roadmap knowledge layer block-first do meta-syste
 
 **Cross-ref forge**: issue [`#16`](../../../issues/16) (Onda 5 Faceta 1 — hook block-flow enrich, materializada nesta Sub-decisão).
 
+### Sub-decisão 13 — Skill `/source-digest` + hook notifier (source-flow Camada 2b)
+
+Materializa Onda 5 Faceta 2 do roadmap knowledge layer block-first do meta-system. Plugin ganha 4ª trajetória de hook bridging + 8ª skill `/source-digest`. Operacionaliza Camada 2b source-flow — digest LLM-driven de fontes externas (web clips do journal + arquivos do filesystem) em páginas estruturadas no grafo Logseq.
+
+**Discriminação vs Sub-decisão 12 — notifier puro vs dispatcher**: SD12 usa Popen detached porque a substância determinística (`enrich.py`) pode executar standalone sem CC ativa. SD13 usa **notifier puro** (JSON `systemMessage` sem Popen) porque digest de fontes é **LLM-dependente**: extração de claims load-bearing, cross-refs a ADRs/entidades do grafo, e síntese de relevância pra knowledge layer requerem reasoning do modelo — não há sub-tool Python que capte isso deterministicamente. Hook sugere; operador decide quando invocar com CC ativa.
+
+**Dois modos da skill `/source-digest`** (thin orchestrator markdown-only sem sub-tool — LLM-driven end-to-end):
+- **Modo journal** (sem arg): detecta clips com `tags:: clippings` sem `digested::` no journal de hoje; extrai metadados (`title::`, `source::`, `author::`, `published::`, `description::`, bullets `* ` como conteúdo); cria `pages/<slug>-digested.md`; adiciona `digested:: [[<slug>-digested]]` ao bloco no journal.
+- **Modo arquivo** (arg = path): lê arquivo via `Read` tool (integral para texto/PDFs ≤50p; truncado `pages: "1-50"` para PDFs >50p com marker explícito); cria `pages/sources/<slug>.md` (raw source page) + `pages/<slug>-digested.md`.
+
+**Gate Logseq desktop obrigatório** (inverso de SD7 Adendo read-only): `/source-digest` é write (cria pages + edita journal); Logseq desktop deve estar aberto para o file watcher detectar novas pages e journal edit não dessincronizar com estado do desktop. `pgrep -xi logseq` zero → recusa fechada.
+
+**Hook notifier `suggest_source_digest` — 2 gates simples**: (i) journal de hoje existe (`~/Notes/logseq/journals/YYYY_MM_DD.md`); (ii) journal tem ≥1 bloco top-level com `tags:: clippings` sem `digested::`. Qualquer gate falha → exit 0 silent. Ambos pass → `print(json.dumps({"systemMessage": "..."}))` sugerindo `/source-digest` (canonical CC 2.1.x non-blocking per SD6). Sem `pgrep` gate no hook — notifier puro não muta state; operador invoca skill quando conveniente.
+
+**Namespace `pages/sources/`** — raw source pages com `provenance:: #source`: canonical Logseq page-ref `[[sources/<slug>]]`; seguem padrão dos arquivos pré-existentes (karpathy-wiki-gist, matuschak-evergreen-notes). Conteúdo extraído integral para ≤50p; truncado com `<!-- truncado: lido até p.50 de N -->` para PDFs >50p. Não é diretório do filesystem para deposit manual — é namespace de pages do grafo; arquivo fonte permanece no path original.
+
+**Discriminação de exit messages no modo journal**: dois casos distintos têm mensagens discriminadas — "nenhum clip (`tags:: clippings`) no journal de hoje" (zero clips) vs "todos os clips de hoje já foram digeridos" (clips presentes mas todos com `digested::`). Sem colapso em mensagem única — operador precisa distinguir para rastrear estado do grafo.
+
+**Invariantes operacionais**:
+- **Idempotência modo arquivo**: slug inferido → check `pages/sources/<slug>.md` antes de criar; se existe → `AskUserQuestion` re-digerir ou sair.
+- **Não mover arquivo fonte**: `pages/sources/<slug>.md` é representação extraída no grafo; arquivo fonte permanece no path original.
+- **Não criar concept pages** (`provenance:: #concept`) — escopo é Camada 2b; Camada 4 é skill futura.
+- **Cross-refs fabricados proibidos**: claims e cross-refs a ADRs/entidades do grafo só quando convergência verificável no conteúdo da source.
+
+**Cross-refs**: Sub-decisão 6 (precedente hook notifier — categoria soft notification reutilizada; gates simplificados vs SD6 triplo-gate porque notifier não precisa de `.claude/local/` nem `pgrep`); Sub-decisão 7 (gate `pgrep` failure-closed write-side — replicado na skill, não no hook); Sub-decisão 12 (discriminação notifier vs dispatcher); [logseq-notes ADR-003](https://github.com/fppfurtado/logseq-notes) (schema `provenance::` Camada 2b — consumer side); roadmap `~/Projects/meta-system/docs/plans/roadmap-knowledge-layer-logseq-block-first.md` § Onda 5 Faceta 2 (origem).
+
+**Cross-ref forge**: issue [`#18`](../../../issues/18) (Onda 5 Faceta 2 — sources digestion Camada 2b, materializada nesta Sub-decisão).
+
 ## Consequências
 
 ### Benefícios
 
-- **12 sub-decisões cobrem 100% da mecânica das 7 skills + 3 hooks bridging** — execução fica tradução literal.
+- **13 sub-decisões cobrem 100% da mecânica das 8 skills + 4 hooks bridging** — execução fica tradução literal.
 - **Critérios "prop mecânica vs humana", "stop event + marker", "exclusão de hoje da janela" são exhaustivos** — sem decisões emergentes que diluem invariantes.
 - **Marker é contract público do toolkit** — qualquer plugin author pode reagir ao fim de `/run-plan` sem fork.
 - **Frontmatter roles vazio é honesto**: skills não inventam dependências em papéis.

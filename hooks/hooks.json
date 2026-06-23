@@ -1,5 +1,5 @@
 {
-  "description": "Hooks do plugin meta-bridge — 3 trajetórias de hook bridging meta-bridge↔CC (per ADR-001 Sub-decisão 6 + Adendo 2026-06-16 + Sub-decisão 12 2026-06-20): Stop event sugerindo /journal-close pós-/run-plan; Stop event disparando enrichment block-flow background quando journal de hoje tem buckets recém-fechados sem provenance; SessionStart event sugerindo /journal-load quando cwd casa com repo owned/active da constelação.",
+  "description": "Hooks do plugin meta-bridge — 4 trajetórias de hook bridging meta-bridge↔CC (per ADR-001 Sub-decisão 6 + Adendo 2026-06-16 + Sub-decisão 12 2026-06-20 + Sub-decisão 13 2026-06-23): Stop event sugerindo /journal-close pós-/run-plan; Stop event disparando enrichment block-flow background quando journal de hoje tem buckets recém-fechados sem provenance; Stop event sugerindo /source-digest quando journal de hoje tem clip não-digerido; SessionStart event sugerindo /journal-load quando cwd casa com repo owned/active da constelação.",
   "hooks": {
     "Stop": [
       {
@@ -20,6 +20,17 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_enrich_blocks.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "description": "Timeout 5s — notifier puro (sem Popen dispatch); sugere /source-digest quando journal de hoje tem clip com tags:: clippings sem digested:: per ADR-001 Sub-decisão 13.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_source_digest.py",
             "timeout": 5
           }
         ]
