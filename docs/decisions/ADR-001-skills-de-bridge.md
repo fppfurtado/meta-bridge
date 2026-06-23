@@ -830,6 +830,19 @@ Passos do orquestrador:
 
 Sub-decisão per [ADR-034 do `pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério "expansão de escopo": (i) decisão central deste ADR — "bridge Logseq-local materializa skills agentic com gate `pgrep` failure-closed + literal append + AskUserQuestion idiomática" — intacta; (ii) categoria nova (knowledge layer Camada 3 entity pages) **justifica** Sub-decisão própria (não Adendo) per pattern de Sub-decisão 9 que estendeu pra `/journal-load` em v0.4.0 (precedente de skill nova → Sub-decisão nova); (iii) sem restrição externa nova; (iv) caráter expansivo + cross-ref recíproco ao meta-system.
 
+#### Adendo 2026-06-23 — `--blocks` opcional com auto-descoberta por `entities::`
+
+`--blocks` deixa de ser obrigatório (issue [#23](https://github.com/fppfurtado/meta-bridge/issues/23)). Dois modos resultantes:
+
+- **Auto-descoberta** (`--entity <name>` sozinho, caso de uso principal): novo Passo 2-bis varre `~/Notes/logseq/pages/*.md` por `entities::` page-level contendo o token literal `[[<entity-name>]]` (brackets fechados — evita falso-positivo substring), exclui a própria entity page, confirma candidatos via `AskUserQuestion`, e os aprovados alimentam o Passo 4 como entradas page-inteira.
+- **Cirúrgico** (`--entity <name> --blocks <list>`): comportamento original 100% preservado — único caminho para `journals/*` e block-ids específicos.
+
+**Decisão de escopo:** auto-descoberta varre **só `pages/*`** (fiel à issue). `entities::` block-level de journals (saída do `/enrich-blocks` per SD12) só entra via `--blocks` explícito — auto-descoberta é page-level scoped. **Match literal** por token `[[<name>]]`, sem NER/fuzzy (preserva doutrina anti-regex-mágica do SKILL.md § O que NÃO fazer; relevância semântica fica no agente no Passo 4). **Degradação `id::`**: candidatos cujo bloco canonical não tem `id::` materializado caem na degradação canonical do Passo 4 (reporta, não infere, segue) — sem pré-filtro (reuso do caminho já existente para o formato `<path>` page-inteira; consistente com o modo cirúrgico).
+
+Decisão central de SD11 intacta — orquestrador heurístico + sub-tool determinístico; `--blocks` continua existindo; `compile.py` **não muda** (recebe `--content` pronto). A auto-descoberta adiciona um passo de descoberta upstream do Passo 4, todo no orquestrador MD.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério (todos 4 satisfeitos: decisão central de SD11 intacta; sem categoria nova — refina o contrato de parse de `--blocks`; sem restrição externa nova; caráter explicativo + refinamento mecânico de contrato documentado).
+
 ### Sub-decisão 12 — Hook block-flow enrich pós-`/journal-close` (categoria operacional nova: hook como trigger de background write substantivo)
 
 Materializa Onda 5 Faceta 1 do roadmap knowledge layer block-first do meta-system. Plugin ganha 3ª trajetória de hook bridging + 7ª skill `/enrich-blocks` + 4º sub-tool determinístico. Operacionaliza Camada 2a Enriched Blocks ([`logseq-notes` ADR-003](https://github.com/fppfurtado/logseq-notes) SD2) — property canonical `provenance:: #enriched` + `entities:: [[X]] [[Y]]` em sub-bullets de buckets do journal de hoje.

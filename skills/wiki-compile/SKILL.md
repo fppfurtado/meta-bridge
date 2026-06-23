@@ -14,20 +14,23 @@ Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Adend
 
 ## Argumentos
 
-Dois flags obrigatórios.
+`--entity` obrigatório; `--blocks` opcional (omitir → auto-descoberta).
 
 ```
-/wiki-compile --entity <entity-name> --blocks <path:block-id,path:block-id,...>
+/wiki-compile --entity <entity-name>                               # auto-descoberta (caso principal)
+/wiki-compile --entity <entity-name> --blocks <path:block-id,...>  # cirúrgico
 ```
 
 - `--entity <entity-name>`: entity alvo (kebab-case lowercase). Ex: `knowledge-layer`, `princípios-fundamentais`. Skill resolve em `~/Notes/logseq/pages/<entity-name>.md`; cria se não existe.
-- `--blocks <list>`: 1+ paths **intra-graph** de blocos-source separados por vírgula. Aceita 2 formatos:
+- `--blocks <list>` (opcional): 1+ paths **intra-graph** de blocos-source separados por vírgula. Aceita 2 formatos:
   - `<path>:<block-id>` — bloco específico identificado por `id::` Logseq (formato canonical pra block-ref).
   - `<path>` — page inteira (skill agrega heurísticamente blocos canonical, não a page toda).
 
   Paths restritos a `~/Notes/logseq/pages/*` + `~/Notes/logseq/journals/*`. Paths fora desse scope → rejeita fechada com mensagem clara.
 
-Args ausentes ou inválidos → recusa silenciosa com mensagem específica. Exit clean.
+  **Omitido** → modo auto-descoberta (Passo 2-bis): skill varre `pages/*` por `entities::` referenciando a entidade. Journals só entram via `--blocks` explícito.
+
+`--entity` ausente ou inválido → recusa com mensagem específica. Exit clean.
 
 ## Passos
 
@@ -40,11 +43,25 @@ Gate per [ADR-001 Sub-decisão 7](../../docs/decisions/ADR-001-skills-de-bridge.
 ### 2. Parse args + validate paths
 
 - `--entity <name>`: extrair. Vazio → recusa com `--entity exige nome não-vazio (kebab-case lowercase)`.
-- `--blocks <list>`: split por vírgula. Lista vazia → recusa com `--blocks exige ≥1 path intra-graph`.
-- Para cada item:
+- `--blocks <list>`:
+  - **Ausente** (flag omitida) → roteia para o Passo 2-bis (auto-descoberta). Não recusa.
+  - **Presente mas vazio** (ex.: `--blocks ""`) → recusa com `--blocks vazio: omita a flag para auto-descoberta ou passe ≥1 path`.
+  - **Presente com paths** → split por vírgula; segue validação por item abaixo (modo cirúrgico).
+- Para cada item (modo cirúrgico):
   - Path resolve a `~/Notes/logseq/pages/*` ou `~/Notes/logseq/journals/*` → OK.
   - Path fora desse scope → recusa fechada com `fontes cross-repo exigem captura prévia via /journal-note no journal de hoje; path rejeitado: <path>`. Exit clean.
   - Formato `<path>:<block-id>` com `<block-id>` malformado (não UUID-like 8+ chars) → recusa com `block-id inválido em <path>:<block-id> — Logseq usa UUID 8+ chars`.
+
+### 2-bis. Auto-descoberta por `entities::` (só quando `--blocks` omitido)
+
+Modo principal de uso. Quando `--blocks` ausente, a skill descobre as pages-source via grafo:
+
+1. **Varrer** `~/Notes/logseq/pages/*.md`. Para cada page, ler a property `entities::` page-level (linha `entities:: ...` na region de properties no topo da page).
+2. **Match** literal por token: incluir a page como candidata se `entities::` contém `[[<entity-name>]]` (com brackets fechados — evita falso-positivo substring tipo `[[<entity-name>-foo]]`). Formato real: `entities:: [[X]], [[Y]], [[Z]]` (vírgula-separado).
+3. **Auto-excluir** `pages/<entity-name>.md` (a própria entity page) da lista — não se agrega uma page nela mesma.
+4. **Lista vazia** → recusa clean: `nenhuma page com entities:: [[<entity-name>]] — use --blocks para modo cirúrgico`. Exit clean.
+5. **Confirmação** via `AskUserQuestion` (header `Candidatos`): apresentar em prosa os basenames descobertos; opções `Confirmar todos` / `Cancelar`. Via Other o operador lista os basenames a **manter** — a lista do Other substitui integralmente a descoberta. `Cancelar` → recusa silenciosa (exit clean, sem mensagem). Other resultando em subset vazio (operador exclui todos) → tratado como `Cancelar` (recusa silenciosa, exit clean).
+6. Candidatos aprovados viram entradas formato `<path>` (page-inteira, sem block-id) que alimentam o Passo 4. Blocos sem `id::` materializável caem na degradação canonical do Passo 4 (reporta, não infere, segue — ver `## O que NÃO fazer`).
 
 ### 3. Find-or-create entity page
 
@@ -69,7 +86,7 @@ Entity page mora em `~/Notes/logseq/pages/<entity-name>.md`.
 
 ### 4. Decisão heurístico-semântica de o que agregar
 
-Agente lê blocos-source apontados em `--blocks`:
+Agente lê os blocos-source — itens de `--blocks` (modo cirúrgico) OU candidatos page-inteira aprovados no Passo 2-bis (auto-descoberta):
 
 - **Formato `<path>:<block-id>`**: ler page, localizar bloco com `id:: <block-id>`, captar conteúdo (linha do bullet + sub-bullets aninhados).
 - **Formato `<path>` (page inteira)**: ler page; identificar blocos canonical (substância densa, baixa redundância vs entity page existente). Critério julgamento agente — **NÃO mecânico**.
@@ -132,6 +149,7 @@ Exit clean.
 - **Não inferir entity alvo do cwd** (pattern oposto a `/journal-note` que infere `--domain` do basename do repo). `--entity` é arg explícito do operador — knowledge layer cross-domínio independe de cwd da sessão.
 - **Não classificar relevância por regex/heurística simples** — cabe ao agente julgar substância semântica; critérios em Passo 4 são guias de julgamento, não checklist mecanizável.
 - **Não aceitar paths cross-repo** — constraint upstream de [meta-bridge ADR-001 SD2](../../docs/decisions/ADR-001-skills-de-bridge.md) (literal append, NÃO block-ref resolvido em runtime) + tese block-first do roadmap. Fontes externas exigem captura prévia via `/journal-note` no journal de hoje.
+- **Não varrer `journals/*` na auto-descoberta** (Passo 2-bis) — `entities::` block-level de journals (saída do `/enrich-blocks`) só entra via `--blocks` explícito (modo cirúrgico); auto-descoberta é page-level scoped per escopo da issue #23.
 - **Não materializar concept pages** (`provenance:: #concept`) em v0 — deferido pra `/wiki-distill` Onda 3+ per Adendo ADR-013 e ADR-003 SD1 do logseq-notes.
 - **Não confundir `type::` (identidade) com `provenance::` (ato editorial)** ao consultar entity page existente. Per [logseq-notes ADR-003 SD1](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-003-knowledge-layer-schema-mecanico.md) os 2 eixos são ortogonais; page pode carregar um, outro, ou ambos.
 - **Não tocar properties page-level existentes** — se entity page já tem properties que o operador escolheu (`type::`, `status::`, etc.), preservar intactas. Skill só agrega substância nas 3 seções canonical + Síntese.
