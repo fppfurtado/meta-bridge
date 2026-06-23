@@ -10,7 +10,7 @@ Skill thin orchestrator para Camada 2b (source-flow) do roadmap knowledge layer 
 
 - **Modo journal** (sem args): detecta web clips não-digeridos no journal de hoje (`tags:: clippings` sem `digested::`) e cria `pages/<slug>-digested.md`.
 - **Modo arquivo** (`/source-digest <path>`): lê arquivo em qualquer path do filesystem, cria `pages/sources/<slug>.md` (raw source page) e `pages/<slug>-digested.md`.
-- **Modo URL** (`/source-digest <url>`): faz fetch da página via `WebFetch`, extrai o artigo em markdown, cria `pages/sources/<slug>.md` (raw source page, `url::` no lugar de `file::`) e `pages/<slug>-digested.md`. Mecanismo é a tool `WebFetch` — sem sub-tool Python nem dependência nova (invariante SD13 preservada).
+- **Modo URL** (`/source-digest <url>`): faz fetch da página (artigos via `WebFetch`; vídeos YouTube via `fetch_youtube_context` do plugin youtube-context), extrai o conteúdo em markdown, cria `pages/sources/<slug>.md` (raw source page, `url::` no lugar de `file::`) e `pages/<slug>-digested.md`. Mecanismo são tools (WebFetch/MCP) — sem sub-tool Python nem dependência nova no pacote (invariante SD13 preservada).
 
 Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 13. Para o padrão de pages digested, ver `karpathy-wiki-gist-digested.md` e `matuschak-evergreen-notes.md` em `~/Notes/logseq/pages/`.
 
@@ -62,10 +62,15 @@ Ler arquivo via `Read` tool:
 
 **Modo URL:**
 
-Arg casa `^https?://`. Fazer fetch da página via `WebFetch` tool, com prompt pedindo a extração do artigo principal integral como markdown, descartando nav/ads/boilerplate/comentários.
+Arg casa `^https?://`. Resolver a fonte conforme o host:
+
+**Sub-detecção de vídeo (YouTube):** host casa `youtube.com`, `youtu.be` ou `m.youtube.com` (qualquer formato — `watch?v=`, `youtu.be/<id>`, `/shorts/`, `/embed/`) → usar a tool `fetch_youtube_context` (MCP do plugin youtube-context) com prompt pedindo síntese do vídeo + claims load-bearing (Gemini processa o vídeo nativo — transcript + visual; aceita `youtu.be` direto, sem resolver redirect). A tool retorna markdown; usar como conteúdo extraído. Tool ausente ou erro (plugin não instalado, sem `OPENROUTER_API_KEY`) → recusa graciosa: `URL de vídeo YouTube requer o plugin youtube-context + OPENROUTER_API_KEY — indisponível; cole o conteúdo manualmente ou use outro modo`. **WebFetch não é usado para vídeo** — só pegaria metadata (título/descrição), sem transcript.
+
+**URL não-vídeo:** fazer fetch via `WebFetch` tool, com prompt pedindo a extração do artigo principal integral como markdown, descartando nav/ads/boilerplate/comentários.
+- **Seguir redirects cross-host:** o WebFetch não segue redirect cross-host — devolve uma resposta `REDIRECT DETECTED` com a redirect URL destino, em vez do conteúdo do artigo. Nesse caso: **(a) re-aplicar a sub-detecção de vídeo ao host destino** — um encurtador (`t.co`, `bit.ly`) ou link canônico pode resolver para YouTube; se o destino casa host de vídeo, roteia pra `fetch_youtube_context`, não WebFetch; **(b) se não-vídeo, re-fetch com a redirect URL**. Máximo 3 hops cross-host; excedido → recusa graciosa. Redirects same-host (http→https, trailing slash) o WebFetch segue transparente, fora da contagem.
 
 **Gate de falha graciosa** (a página é recurso externo, não controlado):
-- WebFetch erro/timeout/conteúdo vazio → recusa fechada: `fetch falhou para <url> — página inacessível, bloqueio de bot ou conteúdo JS-only; tente o modo arquivo salvando a página manualmente`. Exit clean.
+- WebFetch erro/timeout/conteúdo vazio → recusa fechada: `fetch falhou para <url> — página inacessível, bloqueio de bot (403) ou conteúdo JS-only; tente o modo arquivo salvando a página manualmente`. Exit clean.
 - URL malformada que passa o regex `^https?://` mas o WebFetch rejeita → mesma recusa fechada (gate failure-closed é o catch-all).
 - Conteúdo parcial detectável (paywall, "continue reading…", trecho cortado) → prosseguir com o disponível + marcar truncamento no Passo 4. Nunca produzir digest silenciosamente incompleto sem marker.
 
@@ -81,10 +86,10 @@ Arg casa `^https?://`. Fazer fetch da página via `WebFetch` tool, com prompt pe
 - Tipo: extensão do arquivo (ex: `pdf`, `txt`).
 - Slug: mesmas regras acima a partir do título inferido.
 
-**Modo URL:** inferir via LLM a partir do conteúdo fetchado:
-- Título: do `<title>`/header principal do artigo.
-- Autor: se discernível no conteúdo (byline, meta tag).
-- Tipo: `web`.
+**Modo URL:** inferir via LLM a partir do conteúdo fetchado (artigo via WebFetch ou síntese do vídeo via youtube-context):
+- Título: do `<title>`/header do artigo, ou título do vídeo.
+- Autor: byline/meta tag (artigo) ou canal (vídeo), se discernível.
+- Tipo: `web` (artigo) ou `video` (YouTube).
 - Slug: mesmas regras acima a partir do título inferido.
 
 Após inferência do slug em modo arquivo **ou URL**, checar idempotência de `pages/sources/<slug>.md`. Se existe → perguntar ao operador se quer re-digerir ou sair.
@@ -101,7 +106,7 @@ file:: <path-absoluto-do-arquivo>      # modo arquivo
 url:: <url-original>                   # modo URL (no lugar de file::)
 title:: "<título inferido>"
 author:: [[<autor inferido>]]
-type:: <extensão | web>
+type:: <extensão | web | video>
 created:: <hoje YYYY-MM-DD>
 
 # <Título inferido>
@@ -109,9 +114,9 @@ created:: <hoje YYYY-MM-DD>
 <texto extraído como markdown>
 ```
 
-- Modo arquivo → `file:: <path-absoluto>` + `type:: <extensão>`. Modo URL → `url:: <url-original>` + `type:: web`.
+- Modo arquivo → `file:: <path-absoluto>` + `type:: <extensão>`. Modo URL → `url:: <url-original>` + `type:: web` (artigo) ou `type:: video` (YouTube).
 - `author::` como page-ref Logseq se o nome é discernível; omitir se desconhecido.
-- **Conteúdo extraído:** texto integral como markdown (arquivos até 50 páginas em modo arquivo; artigo fetchado em modo URL).
+- **Conteúdo extraído:** texto integral como markdown (arquivos até 50 páginas em modo arquivo; artigo fetchado via WebFetch **ou síntese do vídeo via youtube-context** em modo URL).
 - **Fallback content-filter (escopo: modo URL):** se o Write da raw source page for bloqueado por content filtering policy da API (ocorre com certos conteúdos técnico/financeiros — content filter da API, não da skill), reescrever o conteúdo de forma **estruturada-densa** (seção por seção, resumida, não verbatim) e re-Write; a page resultante mantém estrutura correta (`provenance:: #source`, metadata, seções) com conteúdo comprimido. O mesmo bloqueio em modo arquivo segue como workaround ad-hoc (não codificado aqui) — generalização deferida ao gatilho ≥2 fontes confirmando o pattern.
 - **Truncamento:** PDFs >50 páginas (modo arquivo, leitura truncada no Passo 2) → inserir `<!-- truncado: lido até p.50 de N -->` após o conteúdo. Modo URL com fetch parcial/paywall → inserir `<!-- truncado: paywall/fetch parcial -->`.
 
@@ -197,6 +202,8 @@ Digested page: ~/Notes/logseq/pages/<slug>-digested.md
 - **Não mover ou copiar o arquivo original** em modo arquivo — `pages/sources/<slug>.md` é a representação extraída no grafo; o arquivo permanece onde está.
 - **Não criar sub-tool Python** — digest é LLM-driven (claims, cross-refs, síntese); sem parte determinística isolável. O modo URL usa a tool `WebFetch`, não um scraper Python — invariante preservada (reabrir só se WebFetch se mostrar insuficiente, com gatilho empírico).
 - **Não digerir URL com fetch falho/vazio** — gate de falha graciosa é failure-closed: erro/timeout/conteúdo vazio → recusa fechada, nunca digest fabricado.
+- **Não digerir vídeo YouTube via WebFetch** — WebFetch entrega só metadata (título/descrição), sem transcript; rotear pra `fetch_youtube_context` (plugin youtube-context). Tool ausente → recusa graciosa, não digest de metadata.
+- **Não ignorar redirect cross-host** do WebFetch — re-fetch com a redirect URL (limite ~3 hops); senão encurtadores (youtu.be, t.co, bit.ly) e AMP quebram.
 - **Não produzir digest silenciosamente incompleto** em modo URL — fetch parcial/paywall exige marker de truncamento explícito na raw source page.
 - **Não combinar modos** — os três são mutuamente exclusivos: sem arg = journal, arg `^https?://` = URL, demais paths = arquivo. Nunca inferir path a partir de propriedades do journal nem misturar fontes.
 - **Não fabricar cross-refs** — citar ADRs ou entidades do grafo só quando convergência for real e verificável no conteúdo da source.
