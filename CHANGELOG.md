@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0 — 2026-06-23
+
+### Added
+
+- **`/source-digest` modo URL (3º modo)**: artigos via WebFetch + vídeos YouTube via youtube-context (transcript+visual); redirects cross-host; raw source page com `url::`/`type:: web|video`, digested com `source::` ([#31](https://github.com/fppfurtado/meta-bridge/pull/31)).
+
+### Notes
+
+- `/inbox-aggregate` documentada como 9ª skill no CLAUDE.md.
+
 ## 0.16.0 — 2026-06-23
 
 ### Added
