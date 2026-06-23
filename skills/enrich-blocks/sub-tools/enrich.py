@@ -58,11 +58,12 @@ def list_project_pages(pages_dir: Path) -> list[str]:
 def find_entity_mentions(text: str, project_pages: list[str]) -> list[str]:
     """Match project pages mentioned in text via literal basename presence.
     Preserves order, dedups. NER simples — refinement (Levenshtein, fuzzy) defer
-    per Faceta 3 quando signal real emergir."""
+    per Faceta 3 quando signal real emergir.
+    Word-boundary check prevents substring false positives (e.g. 'teste' in 'testes')."""
     mentions: list[str] = []
     seen: set[str] = set()
     for page in project_pages:
-        if page in text and page not in seen:
+        if page not in seen and re.search(r'\b' + re.escape(page) + r'\b', text, re.IGNORECASE):
             mentions.append(page)
             seen.add(page)
     return mentions
