@@ -14,15 +14,18 @@ Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-d
 
 ## Argumentos
 
-Flag opcional para janela de reconciliação prévia.
+Flags opcionais para janela de reconciliação prévia e destino do journal.
 
 ```
-/journal-close              # default: só hoje
-/journal-close --days 3     # hoje + 3 dias retroativos
-/journal-close --days 7     # janela semanal
+/journal-close                              # default: journal de hoje
+/journal-close --days 3                     # hoje + 3 dias retroativos
+/journal-close --days 7                     # janela semanal
+/journal-close --date 2026-06-22            # retroativo: journal do dia 22
+/journal-close --date 2026-06-22 --days 2   # retroativo + scan 2 dias
 ```
 
-- `--days N`: inteiro N ≥ 0. Default 0 = só hoje. Estende leitura retroativa pra reconciliar TODOs antigos fechados pela sessão. Síntese **sempre** vai no journal de hoje. **Escopo**: `--days N` afeta **apenas** o backlog scan do Step 2.5; coleta de commits no Step 2 sempre usa janela da sessão CC corrente (não estende retroativamente).
+- `--days N`: inteiro N ≥ 0. Default 0. Estende leitura retroativa pra reconciliar TODOs antigos fechados pela sessão. Síntese vai no journal de hoje **ou na data especificada via `--date`**. **Escopo**: `--days N` afeta **apenas** o backlog scan do Step 2.5; coleta de commits no Step 2 sempre usa janela da sessão CC corrente (independente de `--date`). Quando combinado com `--date`, o scan do Step 2.5 retrocede a partir da data especificada em `--date` (não de hoje) — ex.: `--date 2026-06-22 --days 2` escaneia `2026-06-20, 21, 22` e escreve no journal de `22`.
+- `--date YYYY-MM-DD`: override do journal destino. Sem a flag, write vai no journal de hoje. Com ela, write vai no journal da data especificada — caso de uso: sessão que terminou depois da meia-noite, ou write retroativo do dia anterior. `--date` e `--days` são ortogonais (controlam dimensões independentes; podem ser combinadas). **Coleta de commits (Step 2) sempre refere-se à sessão CC corrente, independente de `--date`** — `--date` afeta apenas o destino do write, não o material coletado.
 
 ## Passos
 
@@ -177,7 +180,7 @@ Compor payload markdown estruturado e pipe via stdin:
 
 `echo "$PAYLOAD" | mb journal-close`. Output reporta journal/buckets/transitions/dedup — repassar ao operador.
 
-CLI faz: ordem fixa transitions → find-or-create + dedup por commit hash → append children → upsert property `closed:: <ISO UTC>` no bucket recém-tocado (idempotente: replace se property presente, insert senão; disparo per bucket com appended>0 OR dedup>0; mensageiro pro consumer downstream — Sub-decisão 12 pendente per Bloco 5 do plan onda-5-hook-enrich-blocks). Bootstrap journal se ausente. Sem annotation extra (SSOT in-place per ADR-002 do logseq-notes Sub-decisão 4).
+CLI faz: ordem fixa transitions → find-or-create + dedup por commit hash → append children → upsert property `closed:: <ISO timestamp tz local do sistema>` no bucket recém-tocado (idempotente: replace se property presente, insert senão; disparo per bucket com appended>0 OR dedup>0; mensageiro pro hook `suggest_enrich_blocks` downstream). Sem `--date`: `closed::` usa `now()` com offset tz local. Com `--date`: `closed::` usa 23:59:59 da data especificada com offset tz local (EOD convention). Bootstrap journal se ausente. Sem annotation extra (SSOT in-place per ADR-002 do logseq-notes Sub-decisão 4).
 
 ## O que NÃO fazer
 
