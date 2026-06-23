@@ -6,10 +6,11 @@ disable-model-invocation: false
 
 # source-digest
 
-Skill thin orchestrator para Camada 2b (source-flow) do roadmap knowledge layer block-first do meta-system. Opera em dois modos:
+Skill thin orchestrator para Camada 2b (source-flow) do roadmap knowledge layer block-first do meta-system. Opera em três modos:
 
 - **Modo journal** (sem args): detecta web clips não-digeridos no journal de hoje (`tags:: clippings` sem `digested::`) e cria `pages/<slug>-digested.md`.
 - **Modo arquivo** (`/source-digest <path>`): lê arquivo em qualquer path do filesystem, cria `pages/sources/<slug>.md` (raw source page) e `pages/<slug>-digested.md`.
+- **Modo URL** (`/source-digest <url>`): faz fetch da página via `WebFetch`, extrai o artigo em markdown, cria `pages/sources/<slug>.md` (raw source page, `url::` no lugar de `file::`) e `pages/<slug>-digested.md`. Mecanismo é a tool `WebFetch` — sem sub-tool Python nem dependência nova (invariante SD13 preservada).
 
 Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 13. Para o padrão de pages digested, ver `karpathy-wiki-gist-digested.md` e `matuschak-evergreen-notes.md` em `~/Notes/logseq/pages/`.
 
@@ -18,10 +19,14 @@ Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-d
 ```
 /source-digest                             # modo journal: clips de hoje
 /source-digest /storage/documents/foo.pdf  # modo arquivo: path absoluto ou relativo
+/source-digest https://exemplo.com/artigo  # modo URL: fetch + scrape do artigo
 ```
 
-- Sem args → modo journal.
-- Arg = path → modo arquivo. Path pode ser `.pdf`, `.txt`, `.md`, `.html`, `.json`, `.xml`, `.csv` ou qualquer formato suportado pelo `Read` tool. Path inexistente ou ilegível → recusa fechada com mensagem de gate.
+Detecção de modo (mutuamente exclusivos — nunca combinar):
+
+- Sem args → **modo journal**.
+- Arg casa `^https?://` → **modo URL**. Demais schemes (`file://`, etc.) não são suportados.
+- Arg = path (não casa `^https?://`) → **modo arquivo**. Path pode ser `.pdf`, `.txt`, `.md`, `.html`, `.json`, `.xml`, `.csv` ou qualquer formato suportado pelo `Read` tool. Path inexistente ou ilegível → recusa fechada com mensagem de gate.
 
 ## Passos
 
@@ -55,6 +60,15 @@ Ler arquivo via `Read` tool:
 - PDFs até 50 páginas: ler integral com `pages: "1-N"`.
 - PDFs >50 páginas: ler as primeiras 50 páginas com `pages: "1-50"`; marcar truncamento explicitamente no Passo 4 ao criar a source page.
 
+**Modo URL:**
+
+Arg casa `^https?://`. Fazer fetch da página via `WebFetch` tool, com prompt pedindo a extração do artigo principal integral como markdown, descartando nav/ads/boilerplate/comentários.
+
+**Gate de falha graciosa** (a página é recurso externo, não controlado):
+- WebFetch erro/timeout/conteúdo vazio → recusa fechada: `fetch falhou para <url> — página inacessível, bloqueio de bot ou conteúdo JS-only; tente o modo arquivo salvando a página manualmente`. Exit clean.
+- URL malformada que passa o regex `^https?://` mas o WebFetch rejeita → mesma recusa fechada (gate failure-closed é o catch-all).
+- Conteúdo parcial detectável (paywall, "continue reading…", trecho cortado) → prosseguir com o disponível + marcar truncamento no Passo 4. Nunca produzir digest silenciosamente incompleto sem marker.
+
 ### 3. Inferir slug e metadados
 
 **Modo journal:** gerar slug a partir de `title::` extraído:
@@ -67,32 +81,42 @@ Ler arquivo via `Read` tool:
 - Tipo: extensão do arquivo (ex: `pdf`, `txt`).
 - Slug: mesmas regras acima a partir do título inferido.
 
-Após inferência do slug em modo arquivo, checar idempotência de `pages/sources/<slug>.md`. Se existe → perguntar ao operador se quer re-digerir ou sair.
+**Modo URL:** inferir via LLM a partir do conteúdo fetchado:
+- Título: do `<title>`/header principal do artigo.
+- Autor: se discernível no conteúdo (byline, meta tag).
+- Tipo: `web`.
+- Slug: mesmas regras acima a partir do título inferido.
 
-### 4. [Modo arquivo] Criar raw source page
+Após inferência do slug em modo arquivo **ou URL**, checar idempotência de `pages/sources/<slug>.md`. Se existe → perguntar ao operador se quer re-digerir ou sair.
 
-Escrever `~/Notes/logseq/pages/sources/<slug>.md` com o padrão estabelecido pelos arquivos existentes em `pages/sources/`:
+O modo journal não checa idempotência da digested page — o guard contra re-digestão é o `digested::` no bloco do clip (Passo 7). Colisão de slug entre dois clips distintos de mesmo título é aceita como caso raro não-coberto.
+
+### 4. [Modo arquivo + URL] Criar raw source page
+
+Escrever `~/Notes/logseq/pages/sources/<slug>.md` com o padrão estabelecido pelos arquivos existentes em `pages/sources/`. A property de origem difere por modo (`file::` em modo arquivo, `url::` em modo URL):
 
 ```
 provenance:: #source
-file:: <path-absoluto-do-arquivo>
+file:: <path-absoluto-do-arquivo>      # modo arquivo
+url:: <url-original>                   # modo URL (no lugar de file::)
 title:: "<título inferido>"
 author:: [[<autor inferido>]]
-type:: <extensão>
+type:: <extensão | web>
 created:: <hoje YYYY-MM-DD>
 
 # <Título inferido>
 
-<texto extraído do arquivo como markdown>
+<texto extraído como markdown>
 ```
 
-- `file::` sempre com path absoluto.
+- Modo arquivo → `file:: <path-absoluto>` + `type:: <extensão>`. Modo URL → `url:: <url-original>` + `type:: web`.
 - `author::` como page-ref Logseq se o nome é discernível; omitir se desconhecido.
-- Conteúdo extraído: texto integral para arquivos até 50 páginas. Para PDFs >50 páginas (leitura truncada no Passo 2), inserir linha `<!-- truncado: lido até p.50 de N -->` após o conteúdo extraído.
+- **Conteúdo extraído — verbatim com fallback:** tentar o texto integral como markdown (arquivos até 50 páginas; artigo fetchado em modo URL). Se o Write for bloqueado por content filtering policy da API (ocorre com certos conteúdos técnico/financeiros — content filter da API, não da skill), reescrever o conteúdo de forma **estruturada-densa** (seção por seção, resumida, não verbatim) e re-Write; a page resultante mantém estrutura correta (`provenance:: #source`, metadata, seções) com conteúdo comprimido.
+- **Truncamento:** PDFs >50 páginas (modo arquivo, leitura truncada no Passo 2) → inserir `<!-- truncado: lido até p.50 de N -->` após o conteúdo. Modo URL com fetch parcial/paywall → inserir `<!-- truncado: paywall/fetch parcial -->`.
 
 ### 5. Reasoning LLM — claims e relevância
 
-Com o conteúdo disponível (clip do journal ou arquivo lido), extrair:
+Com o conteúdo disponível (clip do journal, arquivo lido ou artigo fetchado), extrair:
 
 **Claims load-bearing** (3–7 claims por source):
 - Cada claim = insight substancial, não trivialidade ou resumo superficial.
@@ -107,13 +131,15 @@ Com o conteúdo disponível (clip do journal ou arquivo lido), extrair:
 
 Escrever `~/Notes/logseq/pages/<slug>-digested.md`. O template de properties difere por modo:
 
-**Modo arquivo** (`source::` referencia a raw source page):
+**Modo arquivo + URL** (`source::` referencia a raw source page; ambos criam `pages/sources/<slug>.md` no Passo 4):
 ```
 provenance:: #digested
 source:: [[sources/<slug>]]
 entities:: [[<entidade1>]], [[<entidade2>]]
 created:: <hoje YYYY-MM-DD>
 ```
+
+A URL não é repetida na digested do modo URL — vive na raw source page via `url::` (uma única property de origem por digested page; acessível a 1 hop).
 
 **Modo journal** (`source-url::` carrega a URL do clip; sem raw source page):
 ```
@@ -144,7 +170,7 @@ Corpo comum a ambos os modos (após properties):
 
 **Modo journal:** adicionar `digested:: [[<slug>-digested]]` como propriedade ao bloco do clip no journal. Inserir após a última propriedade existente do bloco (antes do primeiro bullet `* `).
 
-**Modo arquivo:** raw source page já criada no Passo 4. Sem edição de journal.
+**Modo arquivo + URL:** raw source page já criada no Passo 4. Sem edição de journal (não há bloco de origem no journal).
 
 ### 8. Reportar
 
@@ -157,6 +183,10 @@ Journal atualizado: digested:: [[<slug>-digested]]
 [Modo arquivo]
 Source page: ~/Notes/logseq/pages/sources/<slug>.md
 Digested page: ~/Notes/logseq/pages/<slug>-digested.md
+
+[Modo URL]
+Source page: ~/Notes/logseq/pages/sources/<slug>.md  (url:: <url>)
+Digested page: ~/Notes/logseq/pages/<slug>-digested.md
 ```
 
 ## O que NÃO fazer
@@ -164,7 +194,9 @@ Digested page: ~/Notes/logseq/pages/<slug>-digested.md
 - **Não rodar com Logseq fechado** — novas pages não serão detectadas pelo grafo; journal edit pode desencontrar com estado do desktop.
 - **Não processar clip com `digested::` já presente** — bloco individual com `digested::` é filtrado na varredura do Passo 2 (não elegível). Se todos os clips do dia já têm `digested::`, exit com mensagem discriminada "todos os clips de hoje já foram digeridos" (não confundir com "nenhum clip encontrado").
 - **Não mover ou copiar o arquivo original** em modo arquivo — `pages/sources/<slug>.md` é a representação extraída no grafo; o arquivo permanece onde está.
-- **Não criar sub-tool Python** — digest é LLM-driven (claims, cross-refs, síntese); sem parte determinística isolável no v0.
-- **Não inferir path de arquivo a partir de propriedades do journal** — os dois modos são mutuamente exclusivos: sem arg = journal, com arg = arquivo. Nunca combinar.
+- **Não criar sub-tool Python** — digest é LLM-driven (claims, cross-refs, síntese); sem parte determinística isolável. O modo URL usa a tool `WebFetch`, não um scraper Python — invariante preservada (reabrir só se WebFetch se mostrar insuficiente, com gatilho empírico).
+- **Não digerir URL com fetch falho/vazio** — gate de falha graciosa é failure-closed: erro/timeout/conteúdo vazio → recusa fechada, nunca digest fabricado.
+- **Não produzir digest silenciosamente incompleto** em modo URL — fetch parcial/paywall exige marker de truncamento explícito na raw source page.
+- **Não combinar modos** — os três são mutuamente exclusivos: sem arg = journal, arg `^https?://` = URL, demais paths = arquivo. Nunca inferir path a partir de propriedades do journal nem misturar fontes.
 - **Não fabricar cross-refs** — citar ADRs ou entidades do grafo só quando convergência for real e verificável no conteúdo da source.
 - **Não criar concept pages** (`provenance:: #concept`) — escopo desta skill é Camada 2b; Camada 4 é `/wiki-lint` Onda 5 Faceta 3.
