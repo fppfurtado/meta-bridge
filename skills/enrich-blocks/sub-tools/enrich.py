@@ -49,10 +49,22 @@ PROVENANCE_RE = re.compile(r"^\t{2,}.*provenance::")
 
 
 def list_project_pages(pages_dir: Path) -> list[str]:
-    """List basenames of pages/<basename>.md (Project Pages canonical per ADR-005)."""
+    """List basenames of Project Pages canonical per ADR-005.
+
+    Filter: only pages containing 'repo-path::' property (written exclusively
+    by 'mb init-project'; discriminates ~18 project pages from ~199 total pages).
+    OSError on individual file read -> silently skip (page not accessible = not a project page).
+    """
     if not pages_dir.is_dir():
         return []
-    return sorted(p.stem for p in pages_dir.glob("*.md"))
+    result = []
+    for p in pages_dir.glob("*.md"):
+        try:
+            if "repo-path::" in p.read_text(encoding="utf-8"):
+                result.append(p.stem)
+        except (OSError, UnicodeDecodeError):
+            pass
+    return sorted(result)
 
 
 def find_entity_mentions(text: str, project_pages: list[str]) -> list[str]:

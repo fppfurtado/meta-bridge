@@ -9,6 +9,7 @@ onda-5-hook-enrich-blocks + invariantes operacionais.
 import importlib.util
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -28,11 +29,11 @@ def enrich_mod():
 
 @pytest.fixture
 def pages_dir(tmp_path):
-    """Cria 2 Project Pages canonical para matching."""
+    """Cria 2 Project Pages canonical para matching (com repo-path:: per fix de scoping)."""
     d = tmp_path / "pages"
     d.mkdir()
-    (d / "meta-bridge.md").write_text("# meta-bridge\n")
-    (d / "meta-system.md").write_text("# meta-system\n")
+    (d / "meta-bridge.md").write_text("repo-path:: /storage/dev/projects/meta-bridge\n")
+    (d / "meta-system.md").write_text("repo-path:: /storage/dev/projects/meta-system\n")
     return d
 
 
@@ -213,3 +214,60 @@ def test_partial_state_preserves_enriched_blocks(enrich_mod, tmp_path, pages_dir
     assert "[[meta-system]]" in final
     # Bloco B (segundo) tem properties novas
     assert "[[meta-bridge]]" in final
+
+
+# --- Cenários de list_project_pages (scoping fix #25) ---
+
+# Cenário (viii) — project page (repo-path:: presente) incluída; non-project excluída
+def test_list_project_pages_filters_by_repo_path_prop(enrich_mod, tmp_path):
+    d = tmp_path / "pages"
+    d.mkdir()
+    (d / "meta-bridge.md").write_text("repo-path:: /storage/dev/projects/meta-bridge\n")
+    (d / "concept-page.md").write_text("# Just a concept, no repo-path\n")
+    result = enrich_mod.list_project_pages(d)
+    assert result == ["meta-bridge"]
+
+
+# Cenário (ix) — -digested.md e template.md (sem repo-path::) excluídos
+def test_list_project_pages_excludes_digested_and_template(enrich_mod, tmp_path):
+    d = tmp_path / "pages"
+    d.mkdir()
+    (d / "meta-bridge.md").write_text("repo-path:: /storage/dev/projects/meta-bridge\n")
+    (d / "meta-bridge-digested.md").write_text("provenance:: #digested\n")
+    (d / "Project Template.md").write_text("type:: template\n")
+    result = enrich_mod.list_project_pages(d)
+    assert result == ["meta-bridge"]
+
+
+# Cenário (x) — arquivo inacessível (OSError) excluído silenciosamente
+def test_list_project_pages_skips_unreadable_file(enrich_mod, tmp_path):
+    d = tmp_path / "pages"
+    d.mkdir()
+    (d / "meta-bridge.md").write_text("repo-path:: /storage/dev/projects/meta-bridge\n")
+    (d / "unreadable.md").write_text("repo-path:: /some/path\n")
+    original_read_text = Path.read_text
+
+    def patched_read_text(self, *args, **kwargs):
+        if self.name == "unreadable.md":
+            raise OSError("permission denied")
+        return original_read_text(self, *args, **kwargs)
+
+    with patch.object(Path, "read_text", patched_read_text):
+        result = enrich_mod.list_project_pages(d)
+    assert result == ["meta-bridge"]
+
+
+# Cenário (xi) — arquivo com bytes inválidos (UnicodeDecodeError) excluído silenciosamente
+def test_list_project_pages_skips_binary_file(enrich_mod, tmp_path):
+    d = tmp_path / "pages"
+    d.mkdir()
+    (d / "meta-bridge.md").write_text("repo-path:: /storage/dev/projects/meta-bridge\n")
+    (d / "binary.md").write_bytes(b"\xff\xfe invalid utf-8 bytes")
+    result = enrich_mod.list_project_pages(d)
+    assert result == ["meta-bridge"]
+
+
+# Cenário (xii) — pages_dir ausente retorna lista vazia sem exceção
+def test_list_project_pages_missing_dir_returns_empty(enrich_mod, tmp_path):
+    result = enrich_mod.list_project_pages(tmp_path / "nonexistent")
+    assert result == []
