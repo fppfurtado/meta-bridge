@@ -56,6 +56,14 @@ HYGIENE_HEADER_RE = re.compile(r"^## Hygiene\s*$")
 HYGIENE_SUB_RE = re.compile(r"^### (Co-occurrence|Rename-implicit|Naming-drift)\s*$")
 HYGIENE_PAGE = "bucket-hygiene"
 
+# Phantom-tag (heurística 8, SD15): #tag colada a delimitador de enclosure
+# materializa phantom page no Logseq. Detecção determinística high-precision;
+# #[[...]] fora de escopo (o `[` não está no charset → falso-negativo aceito).
+PHANTOM_TAG_RE = re.compile(r"#([\w/-]+)([)\]}])")
+PHANTOM_HEADER_RE = re.compile(r"^## Phantom fixes\s*$")
+# 2 campos (1 pipe) — não colide com TRANSITION_RE (3 campos / 2 pipes).
+PHANTOM_FIX_RE = re.compile(r"^- (.+?):(\d+)\s*\|\s*(.+?)\s*$")
+
 
 def resolve_window(
     days: int | None, from_: str | None, to: str | None
@@ -363,6 +371,113 @@ def emit_candidates(candidates: dict[str, list]) -> None:
         click.echo("_(none)_")
 
 
+def detect_phantom_tags(path: Path) -> list[dict]:
+    """Detecta `#tag` colada (sem whitespace) a delimitador de enclosure
+    `)`/`]`/`}` — materializa phantom page no Logseq (heurística 8, SD15).
+
+    Determinístico high-precision. `#[[...]]` fica fora de escopo (o `[` não
+    está no charset do regex → falso-negativo aceito, deferido a backlog).
+    Retorna lista de dicts (path, line, raw, tag). Arquivo ausente → vazio.
+    """
+    out: list[dict] = []
+    if not path.exists():
+        return out
+    for i, line in enumerate(path.read_text().splitlines()):
+        for m in PHANTOM_TAG_RE.finditer(line):
+            out.append(
+                {
+                    "path": str(path),
+                    "line": i + 1,
+                    "raw": m.group(0),
+                    "tag": m.group(1),
+                }
+            )
+    return out
+
+
+def emit_phantom_candidates(phantom: list[dict]) -> None:
+    """Imprime a seção `### Phantom-tag candidates` consumida pela SKILL.md."""
+    click.echo()
+    click.echo("### Phantom-tag candidates\n")
+    if phantom:
+        for p in phantom:
+            click.echo(f"- {p['path']}:{p['line']} | {p['raw']} | #{p['tag']}")
+    else:
+        click.echo("_(none)_")
+
+
+def parse_phantom(raw: str) -> list[dict]:
+    """Parse seção `## Phantom fixes` do payload stdin.
+
+    Format:
+        ## Phantom fixes
+        - <path>:<line> | <raw-match>
+
+    `<raw-match>` é o texto literal colado (ex.: `#foo)`). Section ausente →
+    lista vazia. 2 campos (1 pipe) — não colide com TRANSITION_RE.
+    """
+    entries: list[dict] = []
+    in_section = False
+    for line in raw.splitlines():
+        if PHANTOM_HEADER_RE.match(line):
+            in_section = True
+            continue
+        if line.startswith("## ") and in_section:
+            in_section = False
+            continue
+        if not in_section:
+            continue
+        m = PHANTOM_FIX_RE.match(line)
+        if m:
+            entries.append(
+                {
+                    "path": m.group(1).strip(),
+                    "line": int(m.group(2)),
+                    "raw": m.group(3).strip(),
+                }
+            )
+    return entries
+
+
+def apply_phantom(entries: list[dict]) -> tuple[int, int, list[str]]:
+    """Insere espaço antes do delimitador: `#tag)` → `#tag )` (in-place).
+
+    Transformação uniforme em prosa e `{{query}}` (per SD15 — fix mínimo mata a
+    phantom page sem reclassificar tag→page-ref). Idempotente: o espaço quebra o
+    re-match do regex, então `raw` já-corrigido não é encontrado na linha → skip.
+    Fail-soft: arquivo inexistente ou `raw` ausente na linha (drift) → skip.
+    """
+    if not entries:
+        return 0, 0, []
+    applied = 0
+    skipped = 0
+    msgs: list[str] = []
+    by_path: dict[str, list[dict]] = defaultdict(list)
+    for e in entries:
+        by_path[e["path"]].append(e)
+    for path_str, ents in by_path.items():
+        path = Path(path_str)
+        if not path.exists():
+            skipped += len(ents)
+            continue
+        lines = path.read_text().splitlines()
+        changed = False
+        for e in ents:
+            idx = e["line"] - 1
+            raw = e["raw"]
+            fixed = raw[:-1] + " " + raw[-1]
+            if 0 <= idx < len(lines) and raw in lines[idx]:
+                lines[idx] = lines[idx].replace(raw, fixed, 1)
+                applied += 1
+                changed = True
+                msgs.append(f"{path.name}:{e['line']} {raw} → {fixed}")
+            else:
+                skipped += 1
+        if changed:
+            path.write_text("\n".join(lines) + "\n")
+    return applied, skipped, msgs
+
+
 def parse_structural(raw: str) -> tuple[list[dict], list[dict]]:
     """Parse seção `## Structural` do payload stdin.
 
@@ -644,16 +759,18 @@ def run_apply_mode() -> None:
 
     archived, emerging = parse_structural(raw)
     hygiene = parse_hygiene(raw)
+    phantom = parse_phantom(raw)
 
-    if not transitions and not archived and not emerging and not hygiene:
+    if not transitions and not archived and not emerging and not hygiene and not phantom:
         click.echo(
-            "--apply: nenhuma transição nem entry structural/hygiene parseável (stdin vazio ou formato inválido). Formatos:",
+            "--apply: nenhuma transição nem entry structural/hygiene/phantom parseável (stdin vazio ou formato inválido). Formatos:",
             err=True,
         )
         click.echo("  - <path>:<line> | <before> | <after>", err=True)
         click.echo("  ## Structural / ### Archived buckets / - bucket | categoria | refs", err=True)
         click.echo("  ## Structural / ### Emerging buckets / - canonical | origem", err=True)
         click.echo("  ## Hygiene / ### Co-occurrence|Rename-implicit|Naming-drift / - sugestão", err=True)
+        click.echo("  ## Phantom fixes / - <path>:<line> | <raw-match>", err=True)
         sys.exit(1)
 
     # Transitions primeiro (preserva semântica v0.3.0), structural depois
@@ -692,6 +809,10 @@ def run_apply_mode() -> None:
     for msg in hyg_msgs:
         click.echo(f"  hygiene: {msg}")
 
+    applied_ph, skipped_ph, ph_msgs = apply_phantom(phantom)
+    for msg in ph_msgs:
+        click.echo(f"  phantom: {msg}")
+
     if transitions:
         click.echo(
             f"transitions: {applied_tr} aplicadas, {len(skipped_tr)} skipped"
@@ -710,6 +831,10 @@ def run_apply_mode() -> None:
     if hygiene:
         click.echo(
             f"hygiene: {applied_hyg} sugestões aplicadas ({skipped_hyg} skipped)"
+        )
+    if phantom:
+        click.echo(
+            f"phantom: {applied_ph} fixes aplicados ({skipped_ph} skipped)"
         )
 
 
@@ -746,6 +871,7 @@ def journal_review_cmd(
         "buckets_all": [],
         "buckets_per_journal": [],
     }
+    phantom: list[dict] = []
     journals_found = 0
     for d in window:
         fname = date_to_filename(d)
@@ -753,6 +879,7 @@ def journal_review_cmd(
         if not path.exists():
             continue
         journals_found += 1
+        phantom.extend(detect_phantom_tags(path))
         scanned = scan_journal(path, d.isoformat())
         aggregate["markers_open"].extend(scanned["markers_open"])
         aggregate["dones"].extend(scanned["dones"])
@@ -770,6 +897,11 @@ def journal_review_cmd(
         )
         sys.exit(0)
 
+    # Pages: scan full-dir (sem janela temporal — per SD15). Recursivo cobre
+    # subdirs canonical (sources/, namespaces). Custo full-dir aceito sem cap.
+    for page in sorted(_paths.PAGES_DIR.rglob("*.md")):
+        phantom.extend(detect_phantom_tags(page))
+
     emit_scan_output(window, journals_found, aggregate)
     candidates = compute_candidates(
         aggregate,
@@ -778,3 +910,4 @@ def journal_review_cmd(
         rename_gap_journals,
     )
     emit_candidates(candidates)
+    emit_phantom_candidates(phantom)
