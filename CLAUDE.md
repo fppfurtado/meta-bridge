@@ -33,6 +33,7 @@ These paths are hardcoded in skills. Changing them requires patching the skills,
 - `~/Notes/logseq/pages/<basename>.md` — Project Page canonical naming.
 - `~/Notes/logseq/pages/sources/<slug>.md` — raw source pages criadas por `/source-digest` modo arquivo (per ADR-001 SD13); `provenance:: #source` + metadados + conteúdo extraído. Page-ref canônica: `[[sources/<slug>]]`.
 - `~/Notes/logseq/pages/<slug>-digested.md` — digest pages criadas por `/source-digest` em ambos os modos (per ADR-001 SD13); `provenance:: #digested` + claims + síntese. Page-ref canônica: `[[<slug>-digested]]`.
+- `~/Notes/logseq/pages/bucket-hygiene.md` — page agregadora de sugestões de higiene de bucket criadas por `/journal-review` v2 (per ADR-001 SD10 Adendo 2026-06-24); A2-style find-or-create + append forward-only (co-occurrence/rename-implicit/naming-drift). (Nota: o precedente A2 `pages/<categoria>.md` / `archived-buckets` tem o mesmo status hardcoded não-declarado — drift legado.)
 - `~/Notes/logseq/pages/{Project Template,daily-journal}.md` — schema templates the skills consume. (`session-close.md` archived per ADR-001 Sub-decisão 3 § Adendo v0.2.0; `weekly-review.md` archived per Sub-decisão 5 § Adendo v0.2.0 — composição in-skill substituiu consumo de template.)
 - `~/.mrconfig` — `mr` config for cluster lookup in `/init-logseq-project`.
 - `~/Projects/meta-system/REPOS.md` — fallback cluster lookup (the operator's [meta-system](https://github.com/fppfurtado/meta-system) repo via the `~/Projects` symlink).

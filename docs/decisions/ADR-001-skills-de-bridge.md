@@ -705,9 +705,9 @@ Há overlap conceitual com `/journal-close` v0.4.1 (ambos fecham TODOs por evid�
 **Gatilhos de revisão futuros** (paralelos aos gerais da § Gatilhos de revisão deste ADR):
 
 - **Apply estrutural automático heurísticas 3-4**: N ≥ 2 reports manuais do operador de findings report-only que mereceriam apply automático → reabrir como v0.4.0 com snapshot defensivo per-finding-type (snapshot path canonical fora do graph — XDG cache).
-- **Heurística `bucket-co-occurrence`**: N ≥ 2 reports manuais de buckets coocorrentes sem fusão proposta.
-- **Heurística `bucket-rename-implicit`**: N ≥ 2 incidentes de bucket sumir/renomear sem propagation.
-- **Heurística `bucket-naming-drift`**: N ≥ 2 reports de variantes do mesmo bucket coexistindo.
+- **Heurística `bucket-co-occurrence`**: N ≥ 2 reports manuais de buckets coocorrentes sem fusão proposta. → **Materializada** (Adendo 2026-06-24; issue #9).
+- **Heurística `bucket-rename-implicit`**: N ≥ 2 incidentes de bucket sumir/renomear sem propagation. → **Materializada** (Adendo 2026-06-24; issue #10).
+- **Heurística `bucket-naming-drift`**: N ≥ 2 reports de variantes do mesmo bucket coexistindo. → **Materializada** (Adendo 2026-06-24; issue #11).
 - **Wizard residual `--interactive` precisa virar default**: ≥ 2 reports de findings detectivos zero-cover em janelas grandes → flag muda pra opt-out (`--no-interactive`).
 
 #### Adendo v0.3.1 (2026-06-13) — bootstrap journal: skip wrapper + dedent 1 tab
@@ -789,6 +789,25 @@ Sem ADR novo. Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/f
 **Cross-refs:** Adendo v0.3.2 desta Sub-decisão (calibração T/N + recalibração K/M preservada em K=M=2; predicado AND→OR refinado pelo Adendo v0.3.3 — apply estrutural deste Adendo ortogonal à mudança de conjunção); ADR-002 § Decisão 3 (matching-on-skill — judgment de categoria-page A2 + naming canonical B2 ficam integralmente na skill, CLI consome literal); [ADR-002 SD3 do `logseq-notes`](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) (sanitização kebab-case lowercase); [ADR-058 § (i)](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-058-role-backlog-aceitar-forge.md) do `pragmatic-dev-toolkit` (modo forge backlog).
 
 **Cross-ref → Sub-decisão 14 (contrato `#inbox` federado):** a heurística 1 (`task-closure-by-context`) passa a usar o bucket `#inbox` (materializado por `/inbox-aggregate`) como superfície de reconciliação intencional, discriminando entries Forge-synced (finding informacional não-selecionável pra apply, read-mostly) de PKM-native (finding de transição normal). Regras de discriminação canonical em Sub-decisão 14 § Regras de discriminação.
+
+#### Adendo (2026-06-24) — Trio de heurísticas v2 estruturais de bucket (co-occurrence + rename-implicit + naming-drift)
+
+Materializa as 3 heurísticas detectivas v2 deferidas em § Gatilhos de revisão futuros (linhas 708-710 — co-occurrence, rename-implicit, naming-drift), levando a skill de 4 para 7 heurísticas. As 3 operam sobre o **inventário/nomes/temporalidade de buckets** (não sobre markers de task), detectando entropia de curadoria do knowledge garden:
+
+- **`bucket-co-occurrence`** (issue #9): dois buckets que coocorrem em ≥ N journals da janela → sugestão de fusão A∪B.
+- **`bucket-rename-implicit`** (issue #10): bucket A para de aparecer e A' (semanticamente similar) começa em journals posteriores (gap ≥ G), deixando tasks órfãs sob A.
+- **`bucket-naming-drift`** (issue #11): nomes de bucket com distância de Levenshtein ≤ D coexistindo (variantes/typos do mesmo bucket).
+
+**Apply aditivo forward-only** (paralelo direto ao A2/B2 do Adendo v0.4.0): as 3 emitem sugestões materializadas aditivamente em `pages/bucket-hygiene.md` (find-or-create + append com block-refs aos journals de evidência). **Nenhuma reescreve journals históricos** — a fusão/rename de fato permanece **manual** (read-mostly preservado per [logseq-notes ADR-002 SD4](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md)). Merge estrutural histórico **descartado** (destrutivo; contradiz SSOT-in-place). **Sem snapshot defensivo** — apply aditivo por construção, snapshot YAGNI'd-out (mesmo racional do item (d) do Adendo v0.4.0: snapshot é função mecânica de destrutividade).
+
+**Fence read-mostly crítico** (junção com apply task-level pré-existente): `/journal-review` JÁ tem apply task-level destrutivo-in-place (heurísticas 1-2, marker change TODO→DONE em journal histórico, Step 7). As tasks órfãs detectadas por `bucket-rename-implicit` entram **exclusivamente como evidência (block-refs)** na sugestão da hygiene page — **nunca** como transição task-level. O operador migra/fecha manualmente.
+
+**Mecânica** (matching-on-skill per ADR-002 § Decisão 3 — detecção estrutural mecânica no CLI; judgment semântico de fusão/rename plausível na skill):
+- **Scan** (`emit_scan_output`): nova seção **`### Co-occurrence membership`** (1 linha por journal: `<date> | #A #B #C` — buckets presentes naquele journal; **nome distinto** da subsection `### Co-occurrence` do payload de apply abaixo, evitando colisão entre o contrato scan-out CLI→skill e o apply-in skill→CLI) + `first`/`last` seen por bucket no `### Bucket inventory`. O counting de pares de co-occurrence fica na skill (não matriz pré-computada no CLI — pré-decidir candidatos seria judgment de relevância no engine). (Esta seção **estende** a enumeração do scan da linha 731 — que não é exaustiva pós-2026-06-24.)
+- **Apply** (`parse_hygiene` + `apply_hygiene`): nova seção de payload `## Hygiene` com subsections `### Co-occurrence` / `### Rename-implicit` / `### Naming-drift` → append em `pages/bucket-hygiene.md` sob heading por tipo, idempotente (dedup), forward-only.
+- **Flags de threshold** (paralelas às 4 existentes): `--cooccur-min-journals N` (default 2), `--namedrift-max-distance D` (default 2), `--rename-gap-journals G` (default 2).
+
+**4 critérios [ADR-034](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md)** (Adendo, não sub-decisão nova): (i) decisão central de SD10 ("`/journal-review` detective-first com heurísticas estruturais + apply") **intacta** — trio amplia o conjunto detectivo sem mudar o framework; (ii) **sem categoria nova** — heurística detectiva estrutural com apply aditivo é exatamente a categoria estabelecida pelo Adendo v0.4.0 (A2/B2); (iii) sem restrição externa nova — `pages/bucket-hygiene.md` é page interna do graph (declarada em CLAUDE.md § Hard runtime assumptions); (iv) refinamento aditivo. **Cross-refs:** Adendo v0.4.0 (precedente A2/B2 + snapshot-as-function-of-destructiveness); ADR-002 § Decisão 3 (matching-on-skill); logseq-notes ADR-002 SD4 (SSOT-in-place preservado). Issues #9/#10/#11 cobertas por este Adendo.
 
 ### Sub-decisão 11 — `/wiki-compile` mechanics (knowledge layer Onda 2 — escopo Logseq-local estendido)
 
