@@ -223,13 +223,42 @@ def emit_scan_output(
         bucket_data[bucket_name]["journals"] = len(
             bucket_seen_per_journal[bucket_name]
         )
+    # first/last-seen por bucket (header-based, cronológico) — consumido por
+    # bucket-rename-implicit (SD10 Adendo 2026-06-24). buckets_per_journal vem
+    # em ordem cronológica ascendente (window ordenada).
+    bucket_first_last: dict[str, tuple[str, str]] = {}
+    for date_iso, buckets in aggregate["buckets_per_journal"]:
+        for b in buckets:
+            if b not in bucket_first_last:
+                bucket_first_last[b] = (date_iso, date_iso)
+            else:
+                bucket_first_last[b] = (bucket_first_last[b][0], date_iso)
     if bucket_data:
         for bucket_name in sorted(bucket_data):
             d = bucket_data[bucket_name]
+            fl = bucket_first_last.get(bucket_name)
+            fl_str = f" | first: {fl[0]} last: {fl[1]}" if fl else ""
             click.echo(
                 f"- #{bucket_name} | journals: {d['journals']} | "
-                f"open_tasks: {d['open_tasks']} | done_tasks: {d['done_tasks']}"
+                f"open_tasks: {d['open_tasks']} | done_tasks: {d['done_tasks']}{fl_str}"
             )
+    else:
+        click.echo("_(none)_")
+
+    # Co-occurrence membership (SD10 Adendo 2026-06-24): membership per-journal
+    # para journals com ≥2 buckets — base pro counting de pares na skill (não
+    # matriz pré-computada no CLI). Nome distinto da subsection `### Co-occurrence`
+    # do payload de apply (evita colisão scan-out vs apply-in).
+    click.echo()
+    click.echo("### Co-occurrence membership\n")
+    cooccur_lines = [
+        (date_iso, buckets)
+        for date_iso, buckets in aggregate["buckets_per_journal"]
+        if len(buckets) >= 2
+    ]
+    if cooccur_lines:
+        for date_iso, buckets in cooccur_lines:
+            click.echo(f"- {date_iso} | " + " ".join(f"#{b}" for b in buckets))
     else:
         click.echo("_(none)_")
 
@@ -503,6 +532,7 @@ def journal_review_cmd(
         "dones": [],
         "narratives": [],
         "buckets_all": [],
+        "buckets_per_journal": [],
     }
     journals_found = 0
     for d in window:
@@ -518,6 +548,7 @@ def journal_review_cmd(
         for b in scanned["buckets"]:
             if b not in aggregate["buckets_all"]:
                 aggregate["buckets_all"].append(b)
+        aggregate["buckets_per_journal"].append((d.isoformat(), scanned["buckets"]))
 
     if journals_found == 0:
         click.echo(
