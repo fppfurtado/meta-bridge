@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.0 — 2026-06-24
+
+### Added
+
+- **`/journal-review` v2 — trio de heurísticas estruturais de bucket**: `bucket-co-occurrence` (fusão A∪B), `bucket-rename-implicit` (A→A' + tasks órfãs), `bucket-naming-drift` (Levenshtein); geração de candidatos determinística no CLI + judgment semântico na skill; apply aditivo forward-only em `pages/bucket-hygiene.md` ([#33](https://github.com/fppfurtado/meta-bridge/pull/33)).
+- **Contrato de reconciliação `#inbox` em `/journal-close` + `/journal-review`** (ADR-001 SD14): discrimina entries Forge-synced (informacional read-mostly) de PKM-native (SSOT-in-place transicionável) por source hashtag ([#32](https://github.com/fppfurtado/meta-bridge/pull/32)).
+
 ## 0.17.0 — 2026-06-23
 
 ### Added
