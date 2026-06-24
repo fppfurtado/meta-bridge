@@ -61,7 +61,10 @@ HYGIENE_PAGE = "bucket-hygiene"
 # #[[...]] fora de escopo (o `[` não está no charset → falso-negativo aceito).
 PHANTOM_TAG_RE = re.compile(r"#([\w/-]+)([)\]}])")
 PHANTOM_HEADER_RE = re.compile(r"^## Phantom fixes\s*$")
-# 2 campos (1 pipe) — não colide com TRANSITION_RE (3 campos / 2 pipes).
+# Phantom-fix tem 1 pipe → não casa TRANSITION_RE (2 pipes) no loop de
+# run_apply_mode, logo nunca é reaplicada como transição. A direção reversa
+# (linha de transição casaria PHANTOM_FIX_RE) é barrada pelo section-gating de
+# parse_phantom — só lê linhas dentro de `## Phantom fixes`.
 PHANTOM_FIX_RE = re.compile(r"^- (.+?):(\d+)\s*\|\s*(.+?)\s*$")
 
 
