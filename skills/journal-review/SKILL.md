@@ -97,7 +97,14 @@ Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-brid
 
 #### 2f. Heurística 6 — `bucket-rename-implicit` (apply Hygiene aditivo)
 
-Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome a seção `### Rename-implicit candidates` do scan — o CLI **já fez o filtro mecânico** (bucket A com tasks órfãs + lista de `successors` que surgiram com gap ≥ G após A sumir): `#A | last: <date> | orphans: <refs> | successors: #X #Y`. A skill aplica **só o judgment semântico**: dentre os `successors`, qual é o **rename plausível** de A? A similaridade aqui é **semântica, não léxica** (ex.: `weekly-review → journal-review` tem Levenshtein grande mas é rename óbvio — por isso 2f não usa Levenshtein). Nenhum successor plausível → descartar. Finding emite `(A, A' escolhido, tasks órfãs)`.
+Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome a seção `### Rename-implicit candidates` do scan — o CLI **já fez o filtro mecânico** (bucket A com tasks órfãs + lista de `successors` que surgiram com gap ≥ G após A sumir): `#A | last: <date> | orphans: <refs> | successors: #X #Y`. A skill aplica **só o judgment semântico — e a partir do CONTEÚDO dos buckets, NÃO do nome**: dentre os `successors`, qual é o **rename plausível** de A? **Ler o conteúdo** do bucket A e dos `successors` no journal e avaliar *"é a MESMA obra/tópico continuado sob outro nome?"*. A similaridade é **semântica de conteúdo, não léxica nem de vocabulário de domínio** — `weekly-review → journal-review` tem Levenshtein grande mas é rename óbvio (por isso 2f não usa Levenshtein); **inversamente**, `#tjpa-pje` e `#connector-pje-mandamus-tjpa` compartilham vocabulário PJe/TJPA mas **não** são rename (um é sessão de diagnóstico VPN, o outro um repo de código).
+
+**Guards conservadores (precisão > recall — falso-positivo de rename sugere fundir coisas distintas, pior que silêncio):**
+- **Vocabulário de domínio compartilhado ≠ rename.** `pje`/`tjpa`/`meta` no nome **não basta** — exige sameness de conteúdo, não sobreposição de palavras.
+- **Buckets de sessão pontual** (journal-close de uma sessão CC: um tópico diagnóstico/discussão que apareceu uma vez, com `## ...`/insights/`Direção que emerge`) **não** são projetos renomeáveis → descartar.
+- **Na dúvida → descartar** (nenhum successor plausível). Não emitir finding por similaridade superficial.
+
+Finding emite `(A, A' escolhido, tasks órfãs)`.
 
 **Apply Hygiene** (forward-only): sugestão em § Rename-implicit. **Fence read-mostly crítico**: as tasks órfãs entram **só como evidência** (refs/page-refs) na sugestão — **nunca** como transição task-level (não vão pro `## Transitions`). O operador migra/fecha manual. (Junção com o apply task-level destrutivo das heurísticas 1-2: o trio v2 **não** cruza essa fronteira.)
 
