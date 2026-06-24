@@ -250,20 +250,115 @@ def emit_scan_output(
     else:
         click.echo("_(none)_")
 
-    # Co-occurrence membership (SD10 Adendo 2026-06-24): membership per-journal
-    # para journals com ≥2 buckets — base pro counting de pares na skill (não
-    # matriz pré-computada no CLI). Nome distinto da subsection `### Co-occurrence`
-    # do payload de apply (evita colisão scan-out vs apply-in).
+
+def _levenshtein(a: str, b: str) -> int:
+    """Distância de edição clássica (DP). Determinística — base de naming-drift."""
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def compute_candidates(
+    aggregate: dict[str, list],
+    cooccur_min: int,
+    namedrift_max: int,
+    rename_gap: int,
+) -> dict[str, list]:
+    """Geração DETERMINÍSTICA de candidatos das heurísticas v2 (SD10 Adendo
+    2026-06-24). Mecânica pura — o judgment semântico (fusão-faz-sentido,
+    rename-plausível, escolha de canonical) fica na SKILL.md que consome estes
+    candidatos. Espelha o padrão de 2c (CLI conta, skill julga).
+
+    Retorna dict com 3 listas:
+    - cooccurrence: [(A, B, shared)] — pares com ≥ cooccur_min journals compartilhados.
+    - naming_drift: [(A, B, distance)] — Levenshtein ≤ namedrift_max E ranges
+      coexistem (sobrepõem). Discriminado de rename por co-presença temporal.
+    - rename_implicit: [(A, last_date, [orphan_refs], [successors])] — bucket A
+      com tasks órfãs (markers abertos) + sucessores (gap ≥ rename_gap journals após
+      A sumir). A escolha do sucessor plausível fica pra skill por similaridade
+      SEMÂNTICA (não léxica — ex.: weekly-review→journal-review tem Levenshtein grande).
+    """
+    bpj = aggregate["buckets_per_journal"]  # [(date, [buckets])] cronológico
+    first_pos: dict[str, int] = {}
+    last_pos: dict[str, int] = {}
+    last_date: dict[str, str] = {}
+    for idx, (date_iso, buckets) in enumerate(bpj):
+        for b in buckets:
+            first_pos.setdefault(b, idx)
+            last_pos[b] = idx
+            last_date[b] = date_iso
+    names = sorted(first_pos)
+
+    cooccurrence: list[tuple[str, str, int]] = []
+    naming_drift: list[tuple[str, str, int]] = []
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            a, b = names[i], names[j]
+            shared = sum(1 for _, bk in bpj if a in bk and b in bk)
+            if shared >= cooccur_min:
+                cooccurrence.append((a, b, shared))
+            dist = _levenshtein(a, b)
+            coexist = first_pos[a] <= last_pos[b] and first_pos[b] <= last_pos[a]
+            if 0 < dist <= namedrift_max and coexist:
+                naming_drift.append((a, b, dist))
+
+    orphans_by_bucket: dict[str, list[str]] = defaultdict(list)
+    for m in aggregate["markers_open"]:
+        orphans_by_bucket[m["bucket"]].append(f"{m['path']}:{m['line']}")
+    rename_implicit: list[tuple[str, str, list[str], list[str]]] = []
+    for a in names:
+        orphans = orphans_by_bucket.get(a)
+        if not orphans:
+            continue
+        successors = [
+            b for b in names if b != a and first_pos[b] - last_pos[a] >= rename_gap
+        ]
+        if successors:
+            rename_implicit.append((a, last_date[a], orphans, successors))
+
+    return {
+        "cooccurrence": cooccurrence,
+        "naming_drift": naming_drift,
+        "rename_implicit": rename_implicit,
+    }
+
+
+def emit_candidates(candidates: dict[str, list]) -> None:
+    """Imprime as 3 seções de candidatos v2 (mecânicas) consumidas pela SKILL.md."""
     click.echo()
-    click.echo("### Co-occurrence membership\n")
-    cooccur_lines = [
-        (date_iso, buckets)
-        for date_iso, buckets in aggregate["buckets_per_journal"]
-        if len(buckets) >= 2
-    ]
-    if cooccur_lines:
-        for date_iso, buckets in cooccur_lines:
-            click.echo(f"- {date_iso} | " + " ".join(f"#{b}" for b in buckets))
+    click.echo("### Co-occurrence candidates\n")
+    if candidates["cooccurrence"]:
+        for a, b, shared in candidates["cooccurrence"]:
+            click.echo(f"- #{a} #{b} | shared-journals: {shared}")
+    else:
+        click.echo("_(none)_")
+    click.echo()
+
+    click.echo("### Naming-drift candidates\n")
+    if candidates["naming_drift"]:
+        for a, b, dist in candidates["naming_drift"]:
+            click.echo(f"- #{a} #{b} | distance: {dist}")
+    else:
+        click.echo("_(none)_")
+    click.echo()
+
+    click.echo("### Rename-implicit candidates\n")
+    if candidates["rename_implicit"]:
+        for a, last, orphans, successors in candidates["rename_implicit"]:
+            succ = " ".join(f"#{s}" for s in successors)
+            click.echo(
+                f"- #{a} | last: {last} | orphans: {';'.join(orphans)} | successors: {succ}"
+            )
     else:
         click.echo("_(none)_")
 
@@ -623,13 +718,19 @@ def run_apply_mode() -> None:
 @click.option("--from", "from_", type=str, default=None, help="Início da janela YYYY-MM-DD.")
 @click.option("--to", "to", type=str, default=None, help="Fim da janela YYYY-MM-DD.")
 @click.option("--apply", "apply_mode", is_flag=True, default=False, help="Apply mode: lê transições de stdin.")
+@click.option("--cooccur-min-journals", type=int, default=2, help="Threshold N de bucket-co-occurrence (default 2).")
+@click.option("--namedrift-max-distance", type=int, default=2, help="Threshold D (Levenshtein) de bucket-naming-drift (default 2).")
+@click.option("--rename-gap-journals", type=int, default=2, help="Threshold G (gap) de bucket-rename-implicit (default 2).")
 def journal_review_cmd(
     days: int | None,
     from_: str | None,
     to: str | None,
     apply_mode: bool,
+    cooccur_min_journals: int,
+    namedrift_max_distance: int,
+    rename_gap_journals: int,
 ) -> None:
-    """Scan mecânico de markers/DONE/narrativas/buckets em janela; apply via stdin."""
+    """Scan mecânico de markers/DONE/narrativas/buckets + candidatos v2 em janela; apply via stdin."""
     fail_if_logseq_open()
 
     if apply_mode:
@@ -670,3 +771,10 @@ def journal_review_cmd(
         sys.exit(0)
 
     emit_scan_output(window, journals_found, aggregate)
+    candidates = compute_candidates(
+        aggregate,
+        cooccur_min_journals,
+        namedrift_max_distance,
+        rename_gap_journals,
+    )
+    emit_candidates(candidates)

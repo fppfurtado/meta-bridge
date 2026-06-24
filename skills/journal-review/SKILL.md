@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 # journal-review
 
-Thin orchestrator do subcomando `mb journal-review` (CLI `meta-bridge`). Skill consome o **scan mecânico** do CLI (markers ativos + DONE-tasks + narrativas + inventário de buckets + co-occurrence membership em janela `--days N`), aplica **7 heurísticas semânticas** detectivas, opera preview-first + cherry-pick, e re-invoca CLI em modo `--apply` com transições concretas.
+Thin orchestrator do subcomando `mb journal-review` (CLI `meta-bridge`). Skill consome o **scan mecânico** do CLI (markers ativos + DONE-tasks + narrativas + inventário de buckets + **candidatos determinísticos do trio v2** em janela `--days N` — o CLI faz counting/Levenshtein/gap, a skill aplica só o judgment semântico), aplica **7 heurísticas semânticas** detectivas, opera preview-first + cherry-pick, e re-invoca CLI em modo `--apply` com transições concretas.
 
 Substância semântica (heurísticas, judgment, cherry-pick interpretation) é **heurístico-semântica** e **fica integralmente na skill**. CLI faz só scan + write engine.
 
@@ -35,15 +35,15 @@ Overlap conceitual com `/journal-close`: ambos fecham TODOs por evidência, mas 
 - `--bucket-min-tasks N`: override do threshold M da heurística 2c `bucket-underused`. Default aplica quando ausente (M=2).
 - `--zombie-days N`: override do threshold T da heurística 2b `task-zombie`. Default aplica quando ausente (T=21).
 - `--emerging-min-mentions N`: override do threshold N da heurística 2d `bucket-emerging`. Default aplica quando ausente (N=4).
-- `--cooccur-min-journals N`: override do threshold N da heurística 2e `bucket-co-occurrence`. Default aplica quando ausente (N=2). **Flag SKILL-level** — o counting de pares vive na skill; não passada ao CLI.
-- `--namedrift-max-distance D`: override do threshold D (Levenshtein) da heurística 2g `bucket-naming-drift`. Default aplica quando ausente (D=2). **Flag SKILL-level**.
-- `--rename-gap-journals G`: override do threshold G (gap mínimo entre last-seen de A e first-seen de A') da heurística 2f `bucket-rename-implicit`. Default aplica quando ausente (G=2). **Flag SKILL-level**.
+- `--cooccur-min-journals N`: threshold N da heurística 2e `bucket-co-occurrence`. **Flag CLI-level** (default N=2) — **passada ao CLI**, que conta os pares e emite candidatos.
+- `--namedrift-max-distance D`: threshold D (Levenshtein) da heurística 2g `bucket-naming-drift`. **Flag CLI-level** (default D=2) — **passada ao CLI**, que computa Levenshtein e emite candidatos.
+- `--rename-gap-journals G`: threshold G (gap mínimo entre A.last e A'.first) da heurística 2f `bucket-rename-implicit`. **Flag CLI-level** (default G=2) — **passada ao CLI**, que filtra sucessores por gap + órfãs.
 
 ## Passos
 
 ### 1. Invocar `mb journal-review` scan mode
 
-`Bash mb journal-review [--days N | --from D1 --to D2]` → emite markdown estruturado em stdout com 5 seções (Active markers, DONE tasks, Narratives, Bucket inventory, Co-occurrence membership).
+`Bash mb journal-review [--days N | --from D1 --to D2] [--cooccur-min-journals N] [--namedrift-max-distance D] [--rename-gap-journals G]` → emite markdown estruturado em stdout com **4 seções base** (Active markers, DONE tasks, Narratives, Bucket inventory com `first`/`last`) + **3 seções de candidatos v2** geradas **deterministicamente pelo CLI** (`### Co-occurrence candidates`, `### Naming-drift candidates`, `### Rename-implicit candidates`, per ADR-001 SD10 Adendo 2026-06-24). As 3 flags de threshold do trio são **CLI-level** — o CLI faz o counting, o Levenshtein e o filtro de gap; a skill recebe candidatos e aplica só o **judgment semântico**.
 
 Janela vazia → CLI reporta `nenhum journal encontrado` + exit 0 → skill termina.
 
@@ -91,19 +91,19 @@ Naming sanitização é responsabilidade da skill — CLI consome literal sem re
 
 #### 2e. Heurística 5 — `bucket-co-occurrence` (apply Hygiene aditivo)
 
-Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome a seção `### Co-occurrence membership` do scan (1 linha por journal com ≥2 buckets). Skill faz o **counting de pares** (não vem pré-computado do CLI — judgment de relevância fica na skill): para cada par não-ordenado (A, B), conta journals onde ambos aparecem. Par com contagem ≥ N (N=2 default, override `--cooccur-min-journals N`) → candidato. **Judgment semântico conservador**: a fusão A∪B faz sentido (buckets do mesmo domínio/tema)? Coocorrência alta sem afinidade (ex.: dois projetos paralelos ativos no mesmo período) **não** é candidato.
+Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome a seção `### Co-occurrence candidates` do scan — o CLI **já fez o counting** (par `#A #B | shared-journals: <count>`, só pares com count ≥ N). A skill aplica **só o judgment semântico**: a fusão A∪B faz sentido (buckets do mesmo domínio/tema)? Coocorrência alta sem afinidade (ex.: dois projetos paralelos ativos no mesmo período) → **descartar candidato**. Sobreviventes viram finding.
 
-Finding emite `(A, B, contagem)`. **Apply Hygiene** (forward-only): sugestão em `pages/bucket-hygiene.md` § Co-occurrence — a fusão de fato é **manual** (read-mostly).
+**Apply Hygiene** (forward-only): sugestão em `pages/bucket-hygiene.md` § Co-occurrence — a fusão de fato é **manual** (read-mostly).
 
 #### 2f. Heurística 6 — `bucket-rename-implicit` (apply Hygiene aditivo)
 
-Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome `first`/`last` seen por bucket do `### Bucket inventory`. Detecta par (A, A') onde: **A last-seen < A' first-seen** (A sumiu antes de A' surgir) com gap ≥ G journals (G=2 default, override `--rename-gap-journals N`) + **nomes semanticamente similares** (judgment: A' é rename plausível de A?) + **A tem tasks órfãs** (markers ativos sob A no inventário). Finding emite `(A, A', tasks órfãs)`.
+Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome a seção `### Rename-implicit candidates` do scan — o CLI **já fez o filtro mecânico** (bucket A com tasks órfãs + lista de `successors` que surgiram com gap ≥ G após A sumir): `#A | last: <date> | orphans: <refs> | successors: #X #Y`. A skill aplica **só o judgment semântico**: dentre os `successors`, qual é o **rename plausível** de A? A similaridade aqui é **semântica, não léxica** (ex.: `weekly-review → journal-review` tem Levenshtein grande mas é rename óbvio — por isso 2f não usa Levenshtein). Nenhum successor plausível → descartar. Finding emite `(A, A' escolhido, tasks órfãs)`.
 
 **Apply Hygiene** (forward-only): sugestão em § Rename-implicit. **Fence read-mostly crítico**: as tasks órfãs entram **só como evidência** (refs/page-refs) na sugestão — **nunca** como transição task-level (não vão pro `## Transitions`). O operador migra/fecha manual. (Junção com o apply task-level destrutivo das heurísticas 1-2: o trio v2 **não** cruza essa fronteira.)
 
 #### 2g. Heurística 7 — `bucket-naming-drift` (apply Hygiene aditivo)
 
-Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome os nomes de buckets do `### Bucket inventory`. Computa distância de **Levenshtein** entre pares de nomes; par com distância ≤ D (D=2 default, override `--namedrift-max-distance N`), nomes **não-idênticos**, e **ambos coexistindo na janela** → variantes/typos do mesmo bucket. **Discriminação vs 2f**: drift = ambos coexistem (sobreposição temporal); rename-implicit = um sumiu antes do outro surgir (gap temporal) — o mesmo par de nomes nunca dispara as duas. Judgment: sugerir canonical (o mais frequente, ou o mais recente). Finding emite `(A, A', distância, canonical sugerido)`.
+Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome a seção `### Naming-drift candidates` do scan — o CLI **já computou Levenshtein** e filtrou pares com distância ≤ D, não-idênticos, **coexistindo na janela** (`#A #B | distance: <D>`). **Discriminação vs 2f garantida no CLI**: drift = coexistem (sobreposição temporal); rename-implicit = gap temporal — o mesmo par nunca aparece nas duas seções. A skill aplica **só o judgment leve**: são mesmo variantes do mesmo bucket (não dois buckets legitimamente próximos no nome)? + sugerir o **canonical** (o mais frequente/recente). Finding emite `(A, A', distância, canonical)`.
 
 **Apply Hygiene** (forward-only): sugestão em § Naming-drift.
 
