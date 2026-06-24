@@ -954,11 +954,28 @@ As 2 skills reconciliam tasks via modify-in-place do marker nativo — mecânica
 
 **Sub-decisão nova (não Adendo a SD3/SD10) per critério [ADR-034](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) do toolkit:** introduz **categoria nova** — contrato de uma skill × superfície federada não-SSOT, com regras de discriminação por procedência que nenhuma das 2 sub-decisões existentes contém. Toca 2 sub-decisões (lar único pro contrato cross-skill, com cross-ref bidirecional preservando navegabilidade) em vez de Adendo-gêmeo duplicado.
 
+### Sub-decisão 15 — `/journal-review` heurística 8 `phantom-tag-glued` + extensão de scope para `pages/` (apply in-place mínimo)
+
+Skill `skills/journal-review/SKILL.md` (`#### 2h`) + motor `meta_bridge/journal_review.py` (`detect_phantom_tags`/`emit_phantom_candidates`/`parse_phantom`/`apply_phantom`). Materializa issue forge **meta-bridge#35** (triada via `/triage` 2026-06-24, sessão `remote-control`). Estende Sub-decisão 10 (`/journal-review` detective-first) com a 8ª heurística.
+
+**Problema.** Escrever `(... #tag)` em prosa free-form do grafo cola o `)` na hashtag — o Logseq parseia a tag incluindo o delimitador e materializa uma **phantom page** `#tag)` (nó de referência sem arquivo), poluindo busca e fragmentando backlinks (`#enriched)` separa o backlink do `#enriched` real consumido pelo dashboard `quality-score::`/`provenance::`). Causa raiz é prosa humana, **não** output de skill (skills emitem `- #domain` top-level, sem cola) — guard write-time não cobre. 7 ocorrências reais corrigidas manualmente na descoberta (todas `)`).
+
+**Decisão.** Heurística detective nova (mesmo pattern CLI-detecta/skill-julga das 5-7), com 2 desvios deliberados das anteriores:
+- **Detecção determinística no CLI** (regex `#[\w/-]+[)\]}]` — `)`/`]`/`}`; namespaced `#a/b` coberto; `#[[...]]` fora de escopo pois `[` não está no charset → falso-negativo aceito; `;`/`,` deferidos, conservador). Judgment da skill é **leve** — high-precision mecânica, não exige leitura de conteúdo (≠ 2f/2g).
+- **Scan estende para `pages/`** (full-dir recursivo, sem janela temporal) **além** dos journals da janela. Primeiro consumo de `pages/` como **fonte de scan** no `/journal-review` (as 7 heurísticas anteriores operam só sobre a janela de journals).
+- **Apply in-place mínimo**: `#tag)` → `#tag )` (insere espaço antes do delimitador), **uniforme em prosa e `{{query}}`**. O espaço mata a phantom page sem reclassificar `#tag`→`[[tag]]` (preserva semântica de tag inclusive em queries). Decisão pós-design-review (F1/F5): forma mínima escolhida sobre a conversão idiomática `[[tag]])` para reduzir a superfície de write destrutivo.
+
+**§ Dispensa de snapshot.** O apply cruza para `pages/` **in-place** — superfície destrutiva nova vs o fence forward-only/aditivo das heurísticas 5-7 (Adendo v0.4.0 § (d) + Adendo 2026-06-24 § Hygiene). Snapshot é dispensado mesmo assim: o fix é **single-char insertion idempotente e reversível** (o espaço quebra o re-match do regex → re-apply é no-op; reverter = remover o espaço), e o gate real é **preview-first + cherry-pick**. Raciocínio paralelo à SD10 § asymmetry da heurística 1 (write retroativo single-line atomic dispensa snapshot porque o canal de falha — matching errado — é capturado no preview).
+
+**Sub-decisão nova (não Adendo a SD10) per critério [ADR-034](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) do toolkit:** o trio v2 (Adendo 2026-06-24) passou nos 4 critérios por ser "mais heurísticas, mesma superfície (journals), apply aditivo (Hygiene)". Esta heurística quebra **dois** desses eixos: (i) **forma/lugar de persistência muda** — apply destrutivo in-place em `pages/`, gatilho explícito de ADR; (ii) **superfície de scan nova** — `pages/` como fonte, não só journals. A decisão central da SD10 ("detective-first sobre janela configurável de **journals**") é tocada, não só refinada → Sub-decisão, não Adendo.
+
+**Cross-refs:** Sub-decisão 10 (`/journal-review` — heurística 8 soma-se às 7; fence forward-only das 5-7 explicitamente **não** reivindicado por 2h, que declara superfície distinta); SD10 § asymmetry (precedente de apply in-place dispensando snapshot — heurística 1); ADR-002 § matching-on-skill (detecção determinística no CLI, judgment na skill); [logseq-notes ADR-002 SD4](https://github.com/fppfurtado/logseq-notes/blob/master/docs/decisions/ADR-002-retrofit-daily-journal-formato-gtd-hashtag.md) (SSOT-in-place — o fix preserva o conteúdo, só insere espaço). Pytest cobre o substrato mecânico (19 cenários: detecção/parse/apply/idempotência/não-colisão) per critério parsing-complexo do Adendo ADR-002 2026-06-16.
+
 ## Consequências
 
 ### Benefícios
 
-- **13 sub-decisões cobrem 100% da mecânica das 8 skills + 4 hooks bridging** — execução fica tradução literal.
+- **15 sub-decisões cobrem 100% da mecânica das 9 skills + 4 hooks bridging** — execução fica tradução literal.
 - **Critérios "prop mecânica vs humana", "stop event + marker", "exclusão de hoje da janela" são exhaustivos** — sem decisões emergentes que diluem invariantes.
 - **Marker é contract público do toolkit** — qualquer plugin author pode reagir ao fim de `/run-plan` sem fork.
 - **Frontmatter roles vazio é honesto**: skills não inventam dependências em papéis.
