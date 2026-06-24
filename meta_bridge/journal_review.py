@@ -51,6 +51,11 @@ ARCHIVED_ENTRY_RE = re.compile(r"^- ([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*(.+)$")
 EMERGING_ENTRY_RE = re.compile(r"^- ([^|]+?)(?:\s*\|\s*(.+))?$")
 ARCHIVED_PAGE_SECTION = "- ## Buckets arquivados"
 
+# Hygiene apply payload parsing (per ADR-001 SD10 Adendo 2026-06-24 — trio v2).
+HYGIENE_HEADER_RE = re.compile(r"^## Hygiene\s*$")
+HYGIENE_SUB_RE = re.compile(r"^### (Co-occurrence|Rename-implicit|Naming-drift)\s*$")
+HYGIENE_PAGE = "bucket-hygiene"
+
 
 def resolve_window(
     days: int | None, from_: str | None, to: str | None
@@ -223,12 +228,136 @@ def emit_scan_output(
         bucket_data[bucket_name]["journals"] = len(
             bucket_seen_per_journal[bucket_name]
         )
+    # first/last-seen por bucket (header-based, cronológico) — consumido por
+    # bucket-rename-implicit (SD10 Adendo 2026-06-24). buckets_per_journal vem
+    # em ordem cronológica ascendente (window ordenada).
+    bucket_first_last: dict[str, tuple[str, str]] = {}
+    for date_iso, buckets in aggregate["buckets_per_journal"]:
+        for b in buckets:
+            if b not in bucket_first_last:
+                bucket_first_last[b] = (date_iso, date_iso)
+            else:
+                bucket_first_last[b] = (bucket_first_last[b][0], date_iso)
     if bucket_data:
         for bucket_name in sorted(bucket_data):
             d = bucket_data[bucket_name]
+            fl = bucket_first_last.get(bucket_name)
+            fl_str = f" | first: {fl[0]} last: {fl[1]}" if fl else ""
             click.echo(
                 f"- #{bucket_name} | journals: {d['journals']} | "
-                f"open_tasks: {d['open_tasks']} | done_tasks: {d['done_tasks']}"
+                f"open_tasks: {d['open_tasks']} | done_tasks: {d['done_tasks']}{fl_str}"
+            )
+    else:
+        click.echo("_(none)_")
+
+
+def _levenshtein(a: str, b: str) -> int:
+    """Distância de edição clássica (DP). Determinística — base de naming-drift."""
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def compute_candidates(
+    aggregate: dict[str, list],
+    cooccur_min: int,
+    namedrift_max: int,
+    rename_gap: int,
+) -> dict[str, list]:
+    """Geração DETERMINÍSTICA de candidatos das heurísticas v2 (SD10 Adendo
+    2026-06-24). Mecânica pura — o judgment semântico (fusão-faz-sentido,
+    rename-plausível, escolha de canonical) fica na SKILL.md que consome estes
+    candidatos. Espelha o padrão de 2c (CLI conta, skill julga).
+
+    Retorna dict com 3 listas:
+    - cooccurrence: [(A, B, shared)] — pares com ≥ cooccur_min journals compartilhados.
+    - naming_drift: [(A, B, distance)] — Levenshtein ≤ namedrift_max E ranges
+      coexistem (sobrepõem). Discriminado de rename por co-presença temporal.
+    - rename_implicit: [(A, last_date, [orphan_refs], [successors])] — bucket A
+      com tasks órfãs (markers abertos) + sucessores (gap ≥ rename_gap journals após
+      A sumir). A escolha do sucessor plausível fica pra skill por similaridade
+      SEMÂNTICA (não léxica — ex.: weekly-review→journal-review tem Levenshtein grande).
+    """
+    bpj = aggregate["buckets_per_journal"]  # [(date, [buckets])] cronológico
+    first_pos: dict[str, int] = {}
+    last_pos: dict[str, int] = {}
+    last_date: dict[str, str] = {}
+    for idx, (date_iso, buckets) in enumerate(bpj):
+        for b in buckets:
+            first_pos.setdefault(b, idx)
+            last_pos[b] = idx
+            last_date[b] = date_iso
+    names = sorted(first_pos)
+
+    cooccurrence: list[tuple[str, str, int]] = []
+    naming_drift: list[tuple[str, str, int]] = []
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            a, b = names[i], names[j]
+            shared = sum(1 for _, bk in bpj if a in bk and b in bk)
+            if shared >= cooccur_min:
+                cooccurrence.append((a, b, shared))
+            dist = _levenshtein(a, b)
+            coexist = first_pos[a] <= last_pos[b] and first_pos[b] <= last_pos[a]
+            if 0 < dist <= namedrift_max and coexist:
+                naming_drift.append((a, b, dist))
+
+    orphans_by_bucket: dict[str, list[str]] = defaultdict(list)
+    for m in aggregate["markers_open"]:
+        orphans_by_bucket[m["bucket"]].append(f"{m['path']}:{m['line']}")
+    rename_implicit: list[tuple[str, str, list[str], list[str]]] = []
+    for a in names:
+        orphans = orphans_by_bucket.get(a)
+        if not orphans:
+            continue
+        successors = [
+            b for b in names if b != a and first_pos[b] - last_pos[a] >= rename_gap
+        ]
+        if successors:
+            rename_implicit.append((a, last_date[a], orphans, successors))
+
+    return {
+        "cooccurrence": cooccurrence,
+        "naming_drift": naming_drift,
+        "rename_implicit": rename_implicit,
+    }
+
+
+def emit_candidates(candidates: dict[str, list]) -> None:
+    """Imprime as 3 seções de candidatos v2 (mecânicas) consumidas pela SKILL.md."""
+    click.echo()
+    click.echo("### Co-occurrence candidates\n")
+    if candidates["cooccurrence"]:
+        for a, b, shared in candidates["cooccurrence"]:
+            click.echo(f"- #{a} #{b} | shared-journals: {shared}")
+    else:
+        click.echo("_(none)_")
+    click.echo()
+
+    click.echo("### Naming-drift candidates\n")
+    if candidates["naming_drift"]:
+        for a, b, dist in candidates["naming_drift"]:
+            click.echo(f"- #{a} #{b} | distance: {dist}")
+    else:
+        click.echo("_(none)_")
+    click.echo()
+
+    click.echo("### Rename-implicit candidates\n")
+    if candidates["rename_implicit"]:
+        for a, last, orphans, successors in candidates["rename_implicit"]:
+            succ = " ".join(f"#{s}" for s in successors)
+            click.echo(
+                f"- #{a} | last: {last} | orphans: {';'.join(orphans)} | successors: {succ}"
             )
     else:
         click.echo("_(none)_")
@@ -393,17 +522,113 @@ def apply_emerging_bucket(canonical: str, origem: str | None) -> tuple[bool, str
     return True, f"#{canonical} em {journal.name}{suffix}"
 
 
+def parse_hygiene(raw: str) -> list[tuple[str, str]]:
+    """Parse seção `## Hygiene` do payload stdin → lista de (tipo, sugestão).
+
+    Format:
+        ## Hygiene
+        ### Co-occurrence
+        - <texto da sugestão>
+        ### Rename-implicit
+        - <texto da sugestão>
+        ### Naming-drift
+        - <texto da sugestão>
+
+    `tipo` é um dos headings de HYGIENE_SUB_RE. Section ausente → lista vazia.
+    """
+    entries: list[tuple[str, str]] = []
+    in_hygiene = False
+    current_type: str | None = None
+    for line in raw.splitlines():
+        if HYGIENE_HEADER_RE.match(line):
+            in_hygiene = True
+            current_type = None
+            continue
+        if line.startswith("## ") and in_hygiene:
+            # Saiu da seção Hygiene pra outra ## section
+            in_hygiene = False
+            current_type = None
+            continue
+        if not in_hygiene:
+            continue
+        sm = HYGIENE_SUB_RE.match(line)
+        if sm:
+            current_type = sm.group(1)
+            continue
+        if current_type and line.startswith("- "):
+            suggestion = line[2:].strip()
+            if suggestion:
+                entries.append((current_type, suggestion))
+    return entries
+
+
+def apply_hygiene(entries: list[tuple[str, str]]) -> tuple[int, int, list[str]]:
+    """Append sugestões de higiene em pages/bucket-hygiene.md (forward-only).
+
+    Page structure (Logseq outline):
+        - ## Co-occurrence
+        \t- <sugestão>
+        - ## Rename-implicit
+        \t- <sugestão>
+        - ## Naming-drift
+        \t- <sugestão>
+
+    Find-or-create por seção de tipo. Idempotente: sugestão (match textual
+    exato de linha) já presente em **qualquer** seção da page → skip (escopo
+    global intencional, paralelo a apply_archived_bucket — sugestões carregam
+    o nome do bucket, colisão de texto cross-tipo é pathológica). **Forward-only**
+    — nunca toca journals históricos (read-mostly per SD10 Adendo; órfãs do
+    rename-implicit entram como evidência na sugestão, não como transição).
+    """
+    if not entries:
+        return 0, 0, []
+    page = _paths.page_path(HYGIENE_PAGE)
+    lines = page.read_text().splitlines() if page.exists() else []
+    applied = 0
+    skipped = 0
+    msgs: list[str] = []
+    for type_heading, suggestion in entries:
+        sug_stripped = f"- {suggestion}"
+        if any(line.strip() == sug_stripped for line in lines):
+            skipped += 1
+            continue
+        section_marker = f"- ## {type_heading}"
+        section_idx = next(
+            (i for i, line in enumerate(lines) if line.strip() == section_marker),
+            None,
+        )
+        if section_idx is None:
+            if lines and lines[-1] != "":
+                lines.append("")
+            lines.append(section_marker)
+            section_idx = len(lines) - 1
+        insert_at = section_idx + 1
+        while insert_at < len(lines) and lines[insert_at].startswith("\t"):
+            insert_at += 1
+        lines.insert(insert_at, f"\t- {suggestion}")
+        applied += 1
+        msgs.append(f"{type_heading}: {suggestion[:60]}")
+    if applied:
+        page.write_text("\n".join(lines) + "\n")
+    return applied, skipped, msgs
+
+
 def run_apply_mode() -> None:
-    """Read payload from stdin (transitions + optional structural), apply.
+    """Read payload from stdin (transitions + optional structural/hygiene), apply.
 
     Payload supports:
     - `- <path>:<line> | <before> | <after>` (legacy task-level transitions)
     - `## Structural` section with `### Archived buckets` + `### Emerging buckets`
       (apply estrutural per ADR-001 SD10 Adendo v0.4.0)
+    - `## Hygiene` section with `### Co-occurrence`/`### Rename-implicit`/
+      `### Naming-drift` (apply aditivo forward-only per SD10 Adendo 2026-06-24)
     """
     raw = sys.stdin.read()
     # TRANSITION_RE casa toda linha do payload independente de seção; entries
     # archived/emerging têm 3+/2 campos sem `:linha`, não colidem com o pattern.
+    # Contrato forward (Bloco 4): a skill compõe sugestões de `## Hygiene` SEM o
+    # shape `<path>:<linha> | <a> | <b>` (usa page-refs `[[...]]`) — senão uma
+    # sugestão free-text casaria TRANSITION_RE e viraria write destrutivo num journal.
     transitions: list[tuple[str, int, str, str]] = []
     for line in raw.splitlines():
         m = TRANSITION_RE.match(line)
@@ -418,15 +643,17 @@ def run_apply_mode() -> None:
             )
 
     archived, emerging = parse_structural(raw)
+    hygiene = parse_hygiene(raw)
 
-    if not transitions and not archived and not emerging:
+    if not transitions and not archived and not emerging and not hygiene:
         click.echo(
-            "--apply: nenhuma transição nem entry structural parseável (stdin vazio ou formato inválido). Formatos:",
+            "--apply: nenhuma transição nem entry structural/hygiene parseável (stdin vazio ou formato inválido). Formatos:",
             err=True,
         )
         click.echo("  - <path>:<line> | <before> | <after>", err=True)
         click.echo("  ## Structural / ### Archived buckets / - bucket | categoria | refs", err=True)
         click.echo("  ## Structural / ### Emerging buckets / - canonical | origem", err=True)
+        click.echo("  ## Hygiene / ### Co-occurrence|Rename-implicit|Naming-drift / - sugestão", err=True)
         sys.exit(1)
 
     # Transitions primeiro (preserva semântica v0.3.0), structural depois
@@ -461,6 +688,10 @@ def run_apply_mode() -> None:
         else:
             skipped_emerg.append((entry["canonical"], motivo))
 
+    applied_hyg, skipped_hyg, hyg_msgs = apply_hygiene(hygiene)
+    for msg in hyg_msgs:
+        click.echo(f"  hygiene: {msg}")
+
     if transitions:
         click.echo(
             f"transitions: {applied_tr} aplicadas, {len(skipped_tr)} skipped"
@@ -476,6 +707,10 @@ def run_apply_mode() -> None:
             click.echo(f"  skipped archived #{bucket} — {motivo}", err=True)
         for canonical, motivo in skipped_emerg:
             click.echo(f"  skipped emerging #{canonical} — {motivo}", err=True)
+    if hygiene:
+        click.echo(
+            f"hygiene: {applied_hyg} sugestões aplicadas ({skipped_hyg} skipped)"
+        )
 
 
 @cli.command("journal-review")
@@ -483,13 +718,19 @@ def run_apply_mode() -> None:
 @click.option("--from", "from_", type=str, default=None, help="Início da janela YYYY-MM-DD.")
 @click.option("--to", "to", type=str, default=None, help="Fim da janela YYYY-MM-DD.")
 @click.option("--apply", "apply_mode", is_flag=True, default=False, help="Apply mode: lê transições de stdin.")
+@click.option("--cooccur-min-journals", type=int, default=2, help="Threshold N de bucket-co-occurrence (default 2).")
+@click.option("--namedrift-max-distance", type=int, default=2, help="Threshold D (Levenshtein) de bucket-naming-drift (default 2).")
+@click.option("--rename-gap-journals", type=int, default=2, help="Threshold G (gap) de bucket-rename-implicit (default 2).")
 def journal_review_cmd(
     days: int | None,
     from_: str | None,
     to: str | None,
     apply_mode: bool,
+    cooccur_min_journals: int,
+    namedrift_max_distance: int,
+    rename_gap_journals: int,
 ) -> None:
-    """Scan mecânico de markers/DONE/narrativas/buckets em janela; apply via stdin."""
+    """Scan mecânico de markers/DONE/narrativas/buckets + candidatos v2 em janela; apply via stdin."""
     fail_if_logseq_open()
 
     if apply_mode:
@@ -503,6 +744,7 @@ def journal_review_cmd(
         "dones": [],
         "narratives": [],
         "buckets_all": [],
+        "buckets_per_journal": [],
     }
     journals_found = 0
     for d in window:
@@ -518,6 +760,7 @@ def journal_review_cmd(
         for b in scanned["buckets"]:
             if b not in aggregate["buckets_all"]:
                 aggregate["buckets_all"].append(b)
+        aggregate["buckets_per_journal"].append((d.isoformat(), scanned["buckets"]))
 
     if journals_found == 0:
         click.echo(
@@ -528,3 +771,10 @@ def journal_review_cmd(
         sys.exit(0)
 
     emit_scan_output(window, journals_found, aggregate)
+    candidates = compute_candidates(
+        aggregate,
+        cooccur_min_journals,
+        namedrift_max_distance,
+        rename_gap_journals,
+    )
+    emit_candidates(candidates)
