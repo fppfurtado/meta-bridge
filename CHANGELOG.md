@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.19.0 — 2026-06-24
+
+### Added
+
+- **`/journal-review` 8ª heurística `phantom-tag-glued`** (ADR-001 SD15): detecta `#tag` colada a delimitador de enclosure (`)`/`]`/`}`) — phantom pages do Logseq — em journals da janela + todas as pages; apply in-place mínimo (insere espaço antes do delimitador, uniforme em prosa e `{{query}}`), preview-first ([#36](https://github.com/fppfurtado/meta-bridge/pull/36)).
+
+### Fixed
+
+- **Exclusão de refs GitHub numéricas na detecção phantom-tag**: regex exige ≥1 letra — `(#11)`, `(PR #83)` em prosa deixam de ser falsos-positivos (revelado no smoke contra o grafo real) ([#36](https://github.com/fppfurtado/meta-bridge/pull/36)).
+
 ## 0.18.1 — 2026-06-24
 
 ### Fixed
