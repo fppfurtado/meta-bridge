@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.1 — 2026-06-24
+
+### Fixed
+
+- **`/journal-review` 2f (`bucket-rename-implicit`) — judgment por conteúdo, não nome**: corrige falso-positivo onde a skill endossava rename por vocabulário de domínio compartilhado (`#tjpa-pje` ≠ `#connector-pje-mandamus-tjpa`); agora lê o conteúdo dos buckets + guards contra vocabulário-compartilhado e buckets-de-sessão ([#34](https://github.com/fppfurtado/meta-bridge/pull/34)).
+
 ## 0.18.0 — 2026-06-24
 
 ### Added
