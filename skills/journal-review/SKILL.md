@@ -120,7 +120,7 @@ Per [ADR-001 SD15](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome a 
 
 A skill aplica **judgment leve** (≠ heurísticas 5-7, aqui não precisa ler conteúdo — detecção é high-precision mecânica): descartar apenas falso-positivo óbvio se houver (ex.: trecho literal de código/regex onde a cola é intencional). Sobreviventes viram finding `(path, line, raw-match)`.
 
-**Escopo do regex** (per SD15): `#[\w/-]+` cobre tags namespaced (`#a/b`); `#[[tag com espaço]])` fica **fora de escopo** (falso-negativo aceito). Delimitadores `;`/`,` não cobertos (conservador).
+**Escopo do regex** (per SD15): `#[\w/-]*[a-zA-Z][\w/-]*` cobre tags namespaced (`#a/b`) e exige **≥1 letra** — exclui refs GitHub puramente-numéricas em prosa (`(#11)`, `(PR #83)`), que são notação GitHub, não intenção de tag Logseq. `#[[tag com espaço]])` fica **fora de escopo** (falso-negativo aceito). Delimitadores `;`/`,` não cobertos (conservador).
 
 **Apply in-place mínimo**: `#tag)` → `#tag )` (insere espaço antes do delimitador), **uniforme em prosa e dentro de `{{query}}`** — o espaço mata a phantom page sem reclassificar `#tag`→`[[tag]]` (preserva semântica de tag, inclusive em queries). Idempotente (o espaço quebra o re-match). **Cruza para `pages/` in-place** (superfície destrutiva nova vs o fence forward-only das heurísticas 5-7) — por isso o gate é preview-first + cherry-pick; o fix é single-char reversível.
 

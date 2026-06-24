@@ -52,6 +52,21 @@ def test_detect_ignores_double_bracket_tag(tmp_path):
     assert jr.detect_phantom_tags(p) == []
 
 
+def test_detect_ignores_numeric_tag(tmp_path):
+    # Refs GitHub puramente-numéricas em prosa (#11), (PR #83) NÃO são phantom-tags.
+    p = tmp_path / "j.md"
+    p.write_text("- commit foo (#11)\n- DONE bar (PR #83)\n")
+    assert jr.detect_phantom_tags(p) == []
+
+
+def test_detect_alphanumeric_tag(tmp_path):
+    # Tag com letra+dígito (ex.: #pje2) é tag legítima — detectada.
+    p = tmp_path / "j.md"
+    p.write_text("- x (#pje2)\n")
+    hits = jr.detect_phantom_tags(p)
+    assert [h["tag"] for h in hits] == ["pje2"]
+
+
 def test_detect_multiple_per_line(tmp_path):
     p = tmp_path / "j.md"
     p.write_text("- (#foo) e (#bar)\n")

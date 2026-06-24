@@ -59,7 +59,9 @@ HYGIENE_PAGE = "bucket-hygiene"
 # Phantom-tag (heurística 8, SD15): #tag colada a delimitador de enclosure
 # materializa phantom page no Logseq. Detecção determinística high-precision;
 # #[[...]] fora de escopo (o `[` não está no charset → falso-negativo aceito).
-PHANTOM_TAG_RE = re.compile(r"#([\w/-]+)([)\]}])")
+# Tag exige ≥1 letra — exclui refs GitHub puramente-numéricas em prosa
+# (`(#11)`, `(PR #83)`), que são notação GitHub, não intenção de tag Logseq.
+PHANTOM_TAG_RE = re.compile(r"#([\w/-]*[a-zA-Z][\w/-]*)([)\]}])")
 PHANTOM_HEADER_RE = re.compile(r"^## Phantom fixes\s*$")
 # Phantom-fix tem 1 pipe → não casa TRANSITION_RE (2 pipes) no loop de
 # run_apply_mode, logo nunca é reaplicada como transição. A direção reversa
