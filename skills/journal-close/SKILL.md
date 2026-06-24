@@ -53,6 +53,12 @@ Flags opcionais para janela de reconciliação prévia e destino do journal.
 
 Pra cada journal na janela `--days N`, scan regex `^\t- (TODO|DOING|WAITING) (.*)$` (1-tab indent). Capturar (marker, conteúdo, bucket-pai, source path/line, sub-bullets). `DONE`/`CANCELLED` não capturados (terminais).
 
+**Filtro de exclusão `#inbox` Forge-synced** (per [ADR-001 SD14](../../docs/decisions/ADR-001-skills-de-bridge.md) § Regras de discriminação). O bucket `#inbox` (materializado por `/inbox-aggregate`) é view federada com 2 procedências, e a entry Forge-synced é **estruturalmente idêntica** a um TODO PKM (1-tab marker) — já capturada pela regex acima. Antes de montar o conjunto reconciliável, classificar cada entry cujo `bucket-pai` é `#inbox`:
+- **Forge-synced** sse carrega um `#<forge-repo>` casando o set de repos `role: backlog: forge` conhecidos (reforço: entries do `/inbox-aggregate` carregam suffix `(#<iid>)` no título). Qualquer `#<forge-repo>` presente **domina** sobre `#pkm-native` coexistente. → **removida** do conjunto reconciliável (não vira candidata a transição no Step 3b); segue para o Step 3c-bis como linha informacional.
+- **PKM-native** em todos os outros casos — incl. entry `#inbox` **manual** sem hashtag de fonte → permanece no conjunto, fluxo SSOT-in-place normal (→ Step 3b). Default conservador: na ausência de repo-hashtag conhecida, PKM-native.
+
+Entries fora do bucket `#inbox` seguem inalteradas (sempre reconciliáveis SSOT-in-place).
+
 Backlog vazio → skip reconciliação no Step 3b.
 
 ### 3. Sintetizar rascunho + matching semântico (skill)
@@ -146,20 +152,28 @@ Step 4 preview vê rascunho já resolvido (entries stale ausentes) e recebe expl
 
 **Trade-off explícito do SSOT in-place** (paralelo a Adendo v0.4.0): a remoção **não** entra como `## Transitions` no payload do CLI; write engine não vê a remoção como transição mecânica. Auditabilidade pós-fato depende inteiramente da nota in-prosa + judgment do operador no AskUserQuestion. Coerente com filosofia "SSOT in-place do journal não recebe footprint do probe cross-repo".
 
+#### 3c-bis. Linha informacional `#inbox` Forge-synced (per ADR-001 SD14)
+
+Para cada entry Forge-synced removida no filtro do Step 2.5 cujo conteúdo casa **semanticamente** um DONE da sessão (judgment conservador, igual Step 3b), emitir **linha informacional** no bloco pré-`AskUserQuestion` do Step 4 — sem transição, sem entrada em `## Transitions` no payload:
+
+`#inbox: DONEs da sessão podem ter fechado <repo>#<N> "<título>" — fechar manualmente no Forge (read-mostly)`
+
+`<repo>#<N>` derivado do `#<forge-repo>` + suffix `(#<iid>)` da entry. Sem match semântico → sem linha (silente). A mutação remota (fechar a issue) é **deferida** per [SD14](../../docs/decisions/ADR-001-skills-de-bridge.md) (cutuca-de-close opcional pós-v0); v0 é informacional puro — o operador fecha manualmente no Forge. A entry Forge-synced **permanece** no journal como `TODO` (cópia efêmera; o `/inbox-aggregate` re-materializa o `#inbox` a partir do Forge).
+
 #### 3d. Caso degenerado
 
-Rascunho vazio (sem nenhum bullet de substância editorial — DONE/Frame/Insight/TODO/WAITING/Mudanças/Direção) + transições vazias → recusa silenciosa. Entries removidas pelo Step 3c não contam contra (já saíram do rascunho).
+Rascunho vazio (sem nenhum bullet de substância editorial — DONE/Frame/Insight/TODO/WAITING/Mudanças/Direção) + transições vazias → recusa silenciosa. Entries removidas pelo Step 3c não contam contra (já saíram do rascunho). **Exceção:** linha(s) informacional(is) `#inbox` Forge-synced do Step 3c-bis presente(s) → **não** recusa: emitir o preview read-mostly mesmo com rascunho/transições vazios (o sinal "fechar manualmente no Forge" é output não-vazio).
 
 ### 4. Preview-first via AskUserQuestion (skill)
 
-Apresentar 3 substantivos em prosa antes do enum: (a) rascunho composto pelo Step 3a, (b) transições do Step 3b, (c) **nota in-prosa do Step 3c** quando presente (probe externo cross-repo emitiu falhas ou remoções). `AskUserQuestion` header `Rascunho`:
+Apresentar os substantivos em prosa antes do enum: (a) rascunho composto pelo Step 3a, (b) transições do Step 3b, (c) **nota in-prosa do Step 3c** quando presente (probe externo cross-repo emitiu falhas ou remoções), (d) **linha(s) informacional(is) `#inbox` Forge-synced do Step 3c-bis** quando presente(s) — read-mostly, sem transição. `AskUserQuestion` header `Rascunho`:
 - `Confirma rascunho + transições`.
 - `Edita via Other` — operador descreve ajuste.
 - `Sem substância — não escrever`.
 
 **Dispatch por opção**:
 - `Confirma` → seguir Step 5.
-- `Edita via Other` → re-compor Step 3a/3b absorvendo o ajuste; **Step 3c não re-roda na re-composição** (probe é one-shot por invocação — operador já viu a nota in-prosa e decidiu; entries reintroduzidas via Other ficam preservadas mesmo casando commits cross-repo); voltar para Step 4 com rascunho atualizado.
+- `Edita via Other` → re-compor Step 3a/3b absorvendo o ajuste; **Step 3c não re-roda na re-composição** (probe é one-shot por invocação — operador já viu a nota in-prosa e decidiu; entries reintroduzidas via Other ficam preservadas mesmo casando commits cross-repo); **Step 3c-bis tampouco re-roda** (one-shot, paralelo ao 3c — linhas informacionais `#inbox` já vistas no preview); voltar para Step 4 com rascunho atualizado.
 - `Sem substância` → recusa silenciosa, exit clean (Step 5 não dispara).
 
 ### 5. Invocar `mb journal-close` (CLI write engine)
@@ -196,5 +210,6 @@ CLI faz: ordem fixa transitions → find-or-create + dedup por commit hash → a
 - Não inflar narrativa — brevidade vence completude quando substância é magra.
 - Não 3ª pessoa formal robótica — linguagem 2ª pessoa quando faz sentido editorial.
 - **Não bloquear o fluxo em falha de `git log` cross-repo no Step 3c** — fail-soft com warning visível pré-Step 4 preserva probe parcial sem custo de interrupção. Operador ciente do gap de cobertura sem perder a síntese de hoje.
+- **Não marcar DONE/transição em entry Forge-synced do `#inbox`** — é cópia não-SSOT; o SSOT é a issue no Forge (ADR-001 SD14, read-mostly). Só linha informacional no preview (Step 3c-bis); fechamento manual no Forge.
 - Não fazer commit em logseq-notes — repo de notes tem ciclo próprio.
 - Não auto-fechar plan ativo (`/run-plan`-style done) — `/journal-close` é registro de sessão, não fechamento de plano.

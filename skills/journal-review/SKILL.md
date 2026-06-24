@@ -53,6 +53,12 @@ Pra cada marker ativo, confronta com DONE-tasks e narrativas **posteriores** na 
 
 Finding: `(source-path, source-line, marker original → DONE)`.
 
+**Filtro `#inbox` Forge-synced** (per [ADR-001 SD14](../../docs/decisions/ADR-001-skills-de-bridge.md) § Regras de discriminação). As entries Forge-synced do bucket `#inbox` (materializado por `/inbox-aggregate`) já são confrontadas como markers ativos (1-tab TODO) — adicionar **exclusão explícita**: classificar cada entry cujo bucket-pai é `#inbox` **antes** de gerar findings de transição:
+- **Forge-synced** sse carrega `#<forge-repo>` casando o set de repos `role: backlog: forge` conhecidos (reforço: suffix `(#<iid>)` no título; qualquer `#<forge-repo>` presente **domina** `#pkm-native` coexistente) → **finding informacional** (categoria nova no preview, **não-selecionável** pra apply): `#inbox Forge-synced: <repo>#<N> "<título>" parece fechada na janela — verificar no Forge`. **Nunca** entra no payload `## Transitions` do Step 5.
+- **PKM-native** (incl. entry `#inbox` **manual** sem hashtag de fonte; default conservador na ausência de repo-hashtag conhecida) → finding de transição normal (marker → DONE).
+
+Entries fora do bucket `#inbox` seguem o fluxo normal de transição.
+
 #### 2b. Heurística 2 — `task-zombie` (apply)
 
 Pra cada marker ativo: idade > T dias (T=21 default, override via `--zombie-days N`) + zero DONE relacionado + zero referência em narrativa. Finding: archive (DONE) ou cancel (CANCELLED) — operador escolhe.
@@ -81,14 +87,14 @@ Naming sanitização é responsabilidade da skill — CLI consome literal sem re
 
 ### 3. Preview-first via AskUserQuestion (skill mantém estado em conversation memory)
 
-Skill apresenta findings agrupados por tipo + evidência inline em prosa. Findings das **4 heurísticas** entram no preview (heurísticas 1-2 apply task-level via marker change; heurísticas 3-4 apply estrutural via A2/B2 per ADR-001 SD10 Adendo v0.4.0). `AskUserQuestion` header `Findings`:
+Skill apresenta findings agrupados por tipo + evidência inline em prosa. Findings das **4 heurísticas** entram no preview (heurísticas 1-2 apply task-level via marker change; heurísticas 3-4 apply estrutural via A2/B2 per ADR-001 SD10 Adendo v0.4.0). **Findings informacionais `#inbox` Forge-synced** (heurística 1, per [SD14](../../docs/decisions/ADR-001-skills-de-bridge.md)) aparecem **agrupados à parte, não-selecionáveis** pra apply (read-only por construção: **nenhuma das 3 opções do enum os transforma em transição** — `Aplicar tudo` e `Cherry-pick` os ignoram, `Cancelar` trivialmente não aplica nada; nunca entram no payload `## Transitions`). `AskUserQuestion` header `Findings`:
 - `Aplicar tudo`.
 - `Cherry-pick via Other` — operador descreve subset em prosa; skill interpreta.
 - `Cancelar`.
 
 **Dispatch por opção**:
 - `Aplicar tudo` → transições task-level das heurísticas 1-2 + entries estruturais das heurísticas 3-4 entram no payload do Step 5.
-- `Cherry-pick via Other` → skill interpreta seleção, monta subset (task-level e/ou estrutural, qualquer combinação); selecionadas entram no Step 5. **Cherry-pick com seleção vazia** (operador descreve "nenhuma" ou equivalente) → equivalente a `Cancelar`.
+- `Cherry-pick via Other` → skill interpreta seleção, monta subset (task-level e/ou estrutural, qualquer combinação) — **excluindo sempre os findings informacionais `#inbox` Forge-synced, mesmo se o operador os descrever** (read-only por construção, per SD14); selecionadas entram no Step 5. **Cherry-pick com seleção vazia** (operador descreve "nenhuma" ou equivalente) → equivalente a `Cancelar`.
 - `Cancelar` → pular Steps 5 e 6 do fluxo de heurísticas. **Se `--interactive` ativo e wizard residual (Step 4) gerou transições**, Step 5 ainda executa com payload restrito ao wizard (sem heurísticas 1-2 nem estrutural). Sem wizard → Step 5 não dispara.
 
 Estado dos findings vive em conversation memory entre a apresentação e a invocação de apply. Skill traduz seleção em transições concretas (paths/linhas/before/after) + entries estruturais concretas (bucket/categoria-page/refs; canonical-name/origem) — **não passa IDs opacos pro CLI** (per F2 design-reviewer absorvido).
@@ -166,6 +172,7 @@ Repassar output do `--apply` ao operador (transitions count + structural count) 
 - Não rodar wizard residual por default — `--interactive` é opt-in.
 - Não derivar bucket do cwd — opera cross-files.
 - Não inflar análise quando substância é magra — recusa silenciosa elegante.
+- **Não aplicar transição em entry Forge-synced do `#inbox`** — cópia não-SSOT; o SSOT é a issue no Forge (ADR-001 SD14). Finding informacional não-selecionável; nunca entra em `## Transitions`.
 - Não fazer commit em logseq-notes.
 - Não estender janela default — 30 dias é coerente com curation mensal.
 - Não confundir com `/journal-close` v0.4.1 — eixos distintos (session context vs janela cross-journal).
