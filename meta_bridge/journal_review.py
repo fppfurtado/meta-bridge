@@ -51,6 +51,11 @@ ARCHIVED_ENTRY_RE = re.compile(r"^- ([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*(.+)$")
 EMERGING_ENTRY_RE = re.compile(r"^- ([^|]+?)(?:\s*\|\s*(.+))?$")
 ARCHIVED_PAGE_SECTION = "- ## Buckets arquivados"
 
+# Hygiene apply payload parsing (per ADR-001 SD10 Adendo 2026-06-24 — trio v2).
+HYGIENE_HEADER_RE = re.compile(r"^## Hygiene\s*$")
+HYGIENE_SUB_RE = re.compile(r"^### (Co-occurrence|Rename-implicit|Naming-drift)\s*$")
+HYGIENE_PAGE = "bucket-hygiene"
+
 
 def resolve_window(
     days: int | None, from_: str | None, to: str | None
@@ -422,17 +427,113 @@ def apply_emerging_bucket(canonical: str, origem: str | None) -> tuple[bool, str
     return True, f"#{canonical} em {journal.name}{suffix}"
 
 
+def parse_hygiene(raw: str) -> list[tuple[str, str]]:
+    """Parse seção `## Hygiene` do payload stdin → lista de (tipo, sugestão).
+
+    Format:
+        ## Hygiene
+        ### Co-occurrence
+        - <texto da sugestão>
+        ### Rename-implicit
+        - <texto da sugestão>
+        ### Naming-drift
+        - <texto da sugestão>
+
+    `tipo` é um dos headings de HYGIENE_SUB_RE. Section ausente → lista vazia.
+    """
+    entries: list[tuple[str, str]] = []
+    in_hygiene = False
+    current_type: str | None = None
+    for line in raw.splitlines():
+        if HYGIENE_HEADER_RE.match(line):
+            in_hygiene = True
+            current_type = None
+            continue
+        if line.startswith("## ") and in_hygiene:
+            # Saiu da seção Hygiene pra outra ## section
+            in_hygiene = False
+            current_type = None
+            continue
+        if not in_hygiene:
+            continue
+        sm = HYGIENE_SUB_RE.match(line)
+        if sm:
+            current_type = sm.group(1)
+            continue
+        if current_type and line.startswith("- "):
+            suggestion = line[2:].strip()
+            if suggestion:
+                entries.append((current_type, suggestion))
+    return entries
+
+
+def apply_hygiene(entries: list[tuple[str, str]]) -> tuple[int, int, list[str]]:
+    """Append sugestões de higiene em pages/bucket-hygiene.md (forward-only).
+
+    Page structure (Logseq outline):
+        - ## Co-occurrence
+        \t- <sugestão>
+        - ## Rename-implicit
+        \t- <sugestão>
+        - ## Naming-drift
+        \t- <sugestão>
+
+    Find-or-create por seção de tipo. Idempotente: sugestão (match textual
+    exato de linha) já presente em **qualquer** seção da page → skip (escopo
+    global intencional, paralelo a apply_archived_bucket — sugestões carregam
+    o nome do bucket, colisão de texto cross-tipo é pathológica). **Forward-only**
+    — nunca toca journals históricos (read-mostly per SD10 Adendo; órfãs do
+    rename-implicit entram como evidência na sugestão, não como transição).
+    """
+    if not entries:
+        return 0, 0, []
+    page = _paths.page_path(HYGIENE_PAGE)
+    lines = page.read_text().splitlines() if page.exists() else []
+    applied = 0
+    skipped = 0
+    msgs: list[str] = []
+    for type_heading, suggestion in entries:
+        sug_stripped = f"- {suggestion}"
+        if any(line.strip() == sug_stripped for line in lines):
+            skipped += 1
+            continue
+        section_marker = f"- ## {type_heading}"
+        section_idx = next(
+            (i for i, line in enumerate(lines) if line.strip() == section_marker),
+            None,
+        )
+        if section_idx is None:
+            if lines and lines[-1] != "":
+                lines.append("")
+            lines.append(section_marker)
+            section_idx = len(lines) - 1
+        insert_at = section_idx + 1
+        while insert_at < len(lines) and lines[insert_at].startswith("\t"):
+            insert_at += 1
+        lines.insert(insert_at, f"\t- {suggestion}")
+        applied += 1
+        msgs.append(f"{type_heading}: {suggestion[:60]}")
+    if applied:
+        page.write_text("\n".join(lines) + "\n")
+    return applied, skipped, msgs
+
+
 def run_apply_mode() -> None:
-    """Read payload from stdin (transitions + optional structural), apply.
+    """Read payload from stdin (transitions + optional structural/hygiene), apply.
 
     Payload supports:
     - `- <path>:<line> | <before> | <after>` (legacy task-level transitions)
     - `## Structural` section with `### Archived buckets` + `### Emerging buckets`
       (apply estrutural per ADR-001 SD10 Adendo v0.4.0)
+    - `## Hygiene` section with `### Co-occurrence`/`### Rename-implicit`/
+      `### Naming-drift` (apply aditivo forward-only per SD10 Adendo 2026-06-24)
     """
     raw = sys.stdin.read()
     # TRANSITION_RE casa toda linha do payload independente de seção; entries
     # archived/emerging têm 3+/2 campos sem `:linha`, não colidem com o pattern.
+    # Contrato forward (Bloco 4): a skill compõe sugestões de `## Hygiene` SEM o
+    # shape `<path>:<linha> | <a> | <b>` (usa page-refs `[[...]]`) — senão uma
+    # sugestão free-text casaria TRANSITION_RE e viraria write destrutivo num journal.
     transitions: list[tuple[str, int, str, str]] = []
     for line in raw.splitlines():
         m = TRANSITION_RE.match(line)
@@ -447,15 +548,17 @@ def run_apply_mode() -> None:
             )
 
     archived, emerging = parse_structural(raw)
+    hygiene = parse_hygiene(raw)
 
-    if not transitions and not archived and not emerging:
+    if not transitions and not archived and not emerging and not hygiene:
         click.echo(
-            "--apply: nenhuma transição nem entry structural parseável (stdin vazio ou formato inválido). Formatos:",
+            "--apply: nenhuma transição nem entry structural/hygiene parseável (stdin vazio ou formato inválido). Formatos:",
             err=True,
         )
         click.echo("  - <path>:<line> | <before> | <after>", err=True)
         click.echo("  ## Structural / ### Archived buckets / - bucket | categoria | refs", err=True)
         click.echo("  ## Structural / ### Emerging buckets / - canonical | origem", err=True)
+        click.echo("  ## Hygiene / ### Co-occurrence|Rename-implicit|Naming-drift / - sugestão", err=True)
         sys.exit(1)
 
     # Transitions primeiro (preserva semântica v0.3.0), structural depois
@@ -490,6 +593,10 @@ def run_apply_mode() -> None:
         else:
             skipped_emerg.append((entry["canonical"], motivo))
 
+    applied_hyg, skipped_hyg, hyg_msgs = apply_hygiene(hygiene)
+    for msg in hyg_msgs:
+        click.echo(f"  hygiene: {msg}")
+
     if transitions:
         click.echo(
             f"transitions: {applied_tr} aplicadas, {len(skipped_tr)} skipped"
@@ -505,6 +612,10 @@ def run_apply_mode() -> None:
             click.echo(f"  skipped archived #{bucket} — {motivo}", err=True)
         for canonical, motivo in skipped_emerg:
             click.echo(f"  skipped emerging #{canonical} — {motivo}", err=True)
+    if hygiene:
+        click.echo(
+            f"hygiene: {applied_hyg} sugestões aplicadas ({skipped_hyg} skipped)"
+        )
 
 
 @cli.command("journal-review")
