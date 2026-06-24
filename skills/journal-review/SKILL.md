@@ -1,12 +1,12 @@
 ---
 name: journal-review
-description: Detective-first review com 7 heurísticas estruturais sobre janela configurável de journals; wizard GTD opt-in (sucessor de /weekly-review v0.2.0)
+description: Detective-first review com 8 heurísticas estruturais sobre janela configurável de journals (+ pages para phantom-tags); wizard GTD opt-in (sucessor de /weekly-review v0.2.0)
 disable-model-invocation: false
 ---
 
 # journal-review
 
-Thin orchestrator do subcomando `mb journal-review` (CLI `meta-bridge`). Skill consome o **scan mecânico** do CLI (markers ativos + DONE-tasks + narrativas + inventário de buckets + **candidatos determinísticos do trio v2** em janela `--days N` — o CLI faz counting/Levenshtein/gap, a skill aplica só o judgment semântico), aplica **7 heurísticas semânticas** detectivas, opera preview-first + cherry-pick, e re-invoca CLI em modo `--apply` com transições concretas.
+Thin orchestrator do subcomando `mb journal-review` (CLI `meta-bridge`). Skill consome o **scan mecânico** do CLI (markers ativos + DONE-tasks + narrativas + inventário de buckets + **candidatos determinísticos do trio v2** em janela `--days N` + **candidatos phantom-tag** em journals da janela **e pages full-dir** — o CLI faz counting/Levenshtein/gap/regex, a skill aplica só o judgment semântico), aplica **8 heurísticas semânticas** detectivas, opera preview-first + cherry-pick, e re-invoca CLI em modo `--apply` com transições concretas.
 
 Substância semântica (heurísticas, judgment, cherry-pick interpretation) é **heurístico-semântica** e **fica integralmente na skill**. CLI faz só scan + write engine.
 
@@ -43,7 +43,7 @@ Overlap conceitual com `/journal-close`: ambos fecham TODOs por evidência, mas 
 
 ### 1. Invocar `mb journal-review` scan mode
 
-`Bash mb journal-review [--days N | --from D1 --to D2] [--cooccur-min-journals N] [--namedrift-max-distance D] [--rename-gap-journals G]` → emite markdown estruturado em stdout com **4 seções base** (Active markers, DONE tasks, Narratives, Bucket inventory com `first`/`last`) + **3 seções de candidatos v2** geradas **deterministicamente pelo CLI** (`### Co-occurrence candidates`, `### Naming-drift candidates`, `### Rename-implicit candidates`, per ADR-001 SD10 Adendo 2026-06-24). As 3 flags de threshold do trio são **CLI-level** — o CLI faz o counting, o Levenshtein e o filtro de gap; a skill recebe candidatos e aplica só o **judgment semântico**.
+`Bash mb journal-review [--days N | --from D1 --to D2] [--cooccur-min-journals N] [--namedrift-max-distance D] [--rename-gap-journals G]` → emite markdown estruturado em stdout com **4 seções base** (Active markers, DONE tasks, Narratives, Bucket inventory com `first`/`last`) + **3 seções de candidatos v2** geradas **deterministicamente pelo CLI** (`### Co-occurrence candidates`, `### Naming-drift candidates`, `### Rename-implicit candidates`, per ADR-001 SD10 Adendo 2026-06-24) + **1 seção `### Phantom-tag candidates`** (heurística 8, per SD15 — regex determinístico sobre journals da janela **e todas as pages**). As 3 flags de threshold do trio são **CLI-level** — o CLI faz o counting, o Levenshtein e o filtro de gap; a skill recebe candidatos e aplica só o **judgment semântico**.
 
 Janela vazia → CLI reporta `nenhum journal encontrado` + exit 0 → skill termina.
 
@@ -51,7 +51,7 @@ CLI valida args (mutual exclusion `--days` vs `--from/--to`); skill repassa erro
 
 ### 2. Análise detectiva (heurístico-semântico — fica na skill)
 
-Skill consome scan output e aplica 7 heurísticas (1-2 apply task-level; 3-4 apply estrutural A2/B2; 5-7 apply Hygiene aditivo forward-only):
+Skill consome scan output e aplica 8 heurísticas (1-2 apply task-level; 3-4 apply estrutural A2/B2; 5-7 apply Hygiene aditivo forward-only; 8 apply in-place mínimo em journals+pages):
 
 #### 2a. Heurística 1 — `task-closure-by-context` (apply)
 
@@ -114,18 +114,28 @@ Per [ADR-001 SD10 Adendo 2026-06-24](../../docs/decisions/ADR-001-skills-de-brid
 
 **Apply Hygiene** (forward-only): sugestão em § Naming-drift.
 
+#### 2h. Heurística 8 — `phantom-tag-glued` (apply in-place mínimo)
+
+Per [ADR-001 SD15](../../docs/decisions/ADR-001-skills-de-bridge.md). Consome a seção `### Phantom-tag candidates` do scan — o CLI **já fez a detecção determinística** (regex `#tag` colada a delimitador de enclosure `)`/`]`/`}` em journals da janela **e em todas as pages**): `<path>:<line> | <raw-match> | #<tag>`. Cada candidato é uma `#tag` colada que o Logseq parseia incluindo o delimitador → materializa uma **phantom page** (`#enriched)` etc.), poluindo busca e fragmentando backlinks.
+
+A skill aplica **judgment leve** (≠ heurísticas 5-7, aqui não precisa ler conteúdo — detecção é high-precision mecânica): descartar apenas falso-positivo óbvio se houver (ex.: trecho literal de código/regex onde a cola é intencional). Sobreviventes viram finding `(path, line, raw-match)`.
+
+**Escopo do regex** (per SD15): `#[\w/-]+` cobre tags namespaced (`#a/b`); `#[[tag com espaço]])` fica **fora de escopo** (falso-negativo aceito). Delimitadores `;`/`,` não cobertos (conservador).
+
+**Apply in-place mínimo**: `#tag)` → `#tag )` (insere espaço antes do delimitador), **uniforme em prosa e dentro de `{{query}}`** — o espaço mata a phantom page sem reclassificar `#tag`→`[[tag]]` (preserva semântica de tag, inclusive em queries). Idempotente (o espaço quebra o re-match). **Cruza para `pages/` in-place** (superfície destrutiva nova vs o fence forward-only das heurísticas 5-7) — por isso o gate é preview-first + cherry-pick; o fix é single-char reversível.
+
 **Análise vazia** (zero findings) → recusa silenciosa.
 
 ### 3. Preview-first via AskUserQuestion (skill mantém estado em conversation memory)
 
-Skill apresenta findings agrupados por tipo + evidência inline em prosa. Findings das **7 heurísticas** entram no preview (heurísticas 1-2 apply task-level via marker change; heurísticas 3-4 apply estrutural via A2/B2 per ADR-001 SD10 Adendo v0.4.0; heurísticas 5-7 apply Hygiene aditivo via `## Hygiene` per ADR-001 SD10 Adendo 2026-06-24 — sugestões selecionáveis, forward-only). **Findings informacionais `#inbox` Forge-synced** (heurística 1, per [SD14](../../docs/decisions/ADR-001-skills-de-bridge.md)) aparecem **agrupados à parte, não-selecionáveis** pra apply (read-only por construção: **nenhuma das 3 opções do enum os transforma em transição** — `Aplicar tudo` e `Cherry-pick` os ignoram, `Cancelar` trivialmente não aplica nada; nunca entram no payload `## Transitions`). `AskUserQuestion` header `Findings`:
+Skill apresenta findings agrupados por tipo + evidência inline em prosa. Findings das **8 heurísticas** entram no preview (heurísticas 1-2 apply task-level via marker change; heurísticas 3-4 apply estrutural via A2/B2 per ADR-001 SD10 Adendo v0.4.0; heurísticas 5-7 apply Hygiene aditivo via `## Hygiene` per ADR-001 SD10 Adendo 2026-06-24 — sugestões selecionáveis, forward-only; heurística 8 apply in-place mínimo via `## Phantom fixes` per SD15 — selecionável, espaço uniforme prosa/query). **Findings informacionais `#inbox` Forge-synced** (heurística 1, per [SD14](../../docs/decisions/ADR-001-skills-de-bridge.md)) aparecem **agrupados à parte, não-selecionáveis** pra apply (read-only por construção: **nenhuma das 3 opções do enum os transforma em transição** — `Aplicar tudo` e `Cherry-pick` os ignoram, `Cancelar` trivialmente não aplica nada; nunca entram no payload `## Transitions`). `AskUserQuestion` header `Findings`:
 - `Aplicar tudo`.
 - `Cherry-pick via Other` — operador descreve subset em prosa; skill interpreta.
 - `Cancelar`.
 
 **Dispatch por opção**:
-- `Aplicar tudo` → transições task-level das heurísticas 1-2 + entries estruturais das heurísticas 3-4 entram no payload do Step 5.
-- `Cherry-pick via Other` → skill interpreta seleção, monta subset (task-level e/ou estrutural, qualquer combinação) — **excluindo sempre os findings informacionais `#inbox` Forge-synced, mesmo se o operador os descrever** (read-only por construção, per SD14); selecionadas entram no Step 5. **Cherry-pick com seleção vazia** (operador descreve "nenhuma" ou equivalente) → equivalente a `Cancelar`.
+- `Aplicar tudo` → transições task-level das heurísticas 1-2 + entries estruturais das heurísticas 3-4 + sugestões de higiene das heurísticas 5-7 + fixes phantom da heurística 8 entram no payload do Step 5.
+- `Cherry-pick via Other` → skill interpreta seleção, monta subset (task-level, estrutural, hygiene e/ou phantom, qualquer combinação) — **excluindo sempre os findings informacionais `#inbox` Forge-synced, mesmo se o operador os descrever** (read-only por construção, per SD14); selecionadas entram no Step 5. **Cherry-pick com seleção vazia** (operador descreve "nenhuma" ou equivalente) → equivalente a `Cancelar`.
 - `Cancelar` → pular Steps 5 e 6 do fluxo de heurísticas. **Se `--interactive` ativo e wizard residual (Step 4) gerou transições**, Step 5 ainda executa com payload restrito ao wizard (sem heurísticas 1-2 nem estrutural). Sem wizard → Step 5 não dispara.
 
 Estado dos findings vive em conversation memory entre a apresentação e a invocação de apply. Skill traduz seleção em transições concretas (paths/linhas/before/after) + entries estruturais concretas (bucket/categoria-page/refs; canonical-name/origem) — **não passa IDs opacos pro CLI** (per F2 design-reviewer absorvido).
@@ -144,7 +154,7 @@ Transições do wizard residual (Arquivar/Adiar) entram no **mesmo payload** do 
 
 ### 5. Invocar `mb journal-review --apply` (CLI write engine)
 
-**Apply task-level + estrutural + hygiene** unificados em chamada única. Compor payload contendo (a) transições task-level das heurísticas 1-2 confirmadas no Step 3 + (b) transições do wizard residual do Step 4 (se `--interactive` ativo) + (c) entries estruturais das heurísticas 3-4 confirmadas no Step 3 (per ADR-001 SD10 Adendo v0.4.0) + (d) sugestões de higiene das heurísticas 5-7 confirmadas no Step 3 (per Adendo 2026-06-24). Chamada única ao CLI:
+**Apply task-level + estrutural + hygiene + phantom** unificados em chamada única. Compor payload contendo (a) transições task-level das heurísticas 1-2 confirmadas no Step 3 + (b) transições do wizard residual do Step 4 (se `--interactive` ativo) + (c) entries estruturais das heurísticas 3-4 confirmadas no Step 3 (per ADR-001 SD10 Adendo v0.4.0) + (d) sugestões de higiene das heurísticas 5-7 confirmadas no Step 3 (per Adendo 2026-06-24) + (e) fixes phantom da heurística 8 confirmados no Step 3 (per SD15). Chamada única ao CLI:
 
 ```
 ## Transitions
@@ -170,13 +180,19 @@ Transições do wizard residual (Arquivar/Adiar) entram no **mesmo payload** do 
 
 ### Naming-drift
 - [[A]] ~ [[A']] (Levenshtein <D>) — canonical sugerido: <X>
+
+## Phantom fixes
+
+- <source-path>:<line> | <raw-match>
 ```
+
+**Contrato do `## Phantom fixes`**: `<raw-match>` é o texto literal colado (ex.: `#enriched)`) — 1 pipe só, não colide com `TRANSITION_RE` (2 pipes). O CLI insere espaço antes do delimitador in-place (`#enriched)` → `#enriched )`), uniforme em prosa e `{{query}}`. Fail-soft: `raw-match` ausente na linha (drift/já-corrigido) → skip.
 
 **Heading `## Transitions` é opcional** — CLI aceita transitions bullets top-level sem heading para backward compat de payload v0.3.0 (`## Transitions`-only legacy). Adicionar heading explícito é forma canonical v0.4.0+ para simetria com `## Structural`.
 
 **Contrato forward-only do `## Hygiene`** (load-bearing): as sugestões usam page-refs `[[...]]` e **nunca** o shape `<path>:<linha> | <a> | <b>` de transição. O CLI parseia transições de **toda** linha do payload via `TRANSITION_RE` — uma sugestão de higiene com aquele shape casaria e viraria **write destrutivo num journal**. Page-refs `[[...]]` não colidem (sem `:linha | a | b`). As órfãs do rename-implicit entram como `[[journal-date]]` evidência, **não** como `path:line` transicionável.
 
-`echo "$PAYLOAD" | mb journal-review --apply`. CLI aplica em ordem fixa: transitions primeiro (modify-in-place atomic, mesmo TRANSITION_RE + drift detection do `mb journal-close`); structural depois (A2 = append em `pages/<categoria>.md`; B2 = find-or-create bucket no journal de hoje); hygiene por último (append forward-only em `pages/bucket-hygiene.md`, idempotente). Output: `transitions: X aplicadas` + `structural: A archived + B emerging` + `hygiene: K sugestões aplicadas (S skipped)`.
+`echo "$PAYLOAD" | mb journal-review --apply`. CLI aplica em ordem fixa: transitions primeiro (modify-in-place atomic, mesmo TRANSITION_RE + drift detection do `mb journal-close`); structural depois (A2 = append em `pages/<categoria>.md`; B2 = find-or-create bucket no journal de hoje); hygiene em seguida (append forward-only em `pages/bucket-hygiene.md`, idempotente); phantom por último (in-place mínimo em journals+pages, idempotente). Output: `transitions: X aplicadas` + `structural: A archived + B emerging` + `hygiene: K sugestões aplicadas (S skipped)` + `phantom: P fixes aplicados (S skipped)`.
 
 Sem heurística selecionada via `Cherry-pick` → seção respectiva omitida do payload (vazia silente). Payload completamente vazio → tratado upstream em Step 3 dispatch (short-circuit; não chega aqui).
 
@@ -198,16 +214,16 @@ Sem heurística selecionada via `Cherry-pick` → seção respectiva omitida do 
 		- Heurística 4 (bucket-emerging): <B emerging no journal de hoje>
 ```
 
-Append no journal de hoje via CLI. Default off — curation é meta-operação invisível.
+Append no journal de hoje via CLI. Default off — curation é meta-operação invisível. O summary cobre **intencionalmente só as heurísticas 1-4** (transição task-level/estrutural); heurísticas 5-8 (Hygiene + phantom) são omitidas por design — apply aditivo/in-place sem narrativa de fechamento de task.
 
 ### 7. Reportar
 
-Repassar output do `--apply` ao operador (transitions count + structural count) + agregado de findings emitidos por heurística + wizard residual count (se `--interactive`). Em apply estrutural A2, mencionar page agregadora criada/atualizada; em B2, mencionar bucket emergente no journal de hoje.
+Repassar output do `--apply` ao operador (transitions + structural + hygiene + phantom counts) + agregado de findings emitidos por heurística + wizard residual count (se `--interactive`). Em apply estrutural A2, mencionar page agregadora criada/atualizada; em B2, mencionar bucket emergente no journal de hoje; em phantom, mencionar quantos fixes in-place foram aplicados em journals/pages.
 
 ## O que NÃO fazer
 
 - **Não duplicar substância de scan/apply** — vive em `meta_bridge.journal_review`.
-- **Não criar snapshot defensivo XDG cache** — A2 aditiva (append em page agregadora) + B2 forward-only (find-or-create no journal de hoje) + Hygiene aditivo (append em `pages/bucket-hygiene.md`, heurísticas 5-7) são safe-by-construction, sem touch em journals históricos. Transitions task-level (heurísticas 1-2) usam modify-in-place atomic (TRANSITION_RE + drift detection do `mb journal-close`, idempotente single-line); também não precisam de snapshot. Snapshot só faz sentido se apply for destrutivo no sentido cross-file e não-recuperável (per ADR-001 SD10 Adendo v0.4.0).
+- **Não criar snapshot defensivo XDG cache** — A2 aditiva (append em page agregadora) + B2 forward-only (find-or-create no journal de hoje) + Hygiene aditivo (append em `pages/bucket-hygiene.md`, heurísticas 5-7) são safe-by-construction, sem touch em journals históricos. Transitions task-level (heurísticas 1-2) usam modify-in-place atomic (TRANSITION_RE + drift detection do `mb journal-close`, idempotente single-line); também não precisam de snapshot. Phantom (heurística 8) é in-place cross-file (journals **e** pages) mas **recuperável** — fix single-char (`#tag )`), idempotente, reversível — portanto também dispensa snapshot. Snapshot só faria sentido se apply fosse destrutivo cross-file **e não-recuperável** (per ADR-001 SD10 Adendo v0.4.0 + SD15).
 - Não propor finding em matches incertos — judgment conservador.
 - Não modificar markers em sub-bullets (≥2 tabs) — prosa contextual.
 - Não capturar `DONE`/`CANCELLED` como reconciliáveis — terminais (ADR-002 do logseq-notes Sub-decisão 4).
@@ -220,6 +236,8 @@ Repassar output do `--apply` ao operador (transitions count + structural count) 
 - **Não transicionar tasks órfãs detectadas por `rename-implicit`** — entram **só como evidência** na sugestão de higiene, **nunca** como transição task-level (não cruzam pra `## Transitions`; junção com o apply destrutivo das heurísticas 1-2 fenced).
 - **Não compor sugestões de `## Hygiene` com o shape `path:line | a | b`** — usa page-refs `[[...]]`; senão o CLI casaria `TRANSITION_RE` e faria write destrutivo num journal (contrato forward-only load-bearing).
 - **Não aplicar transição em entry Forge-synced do `#inbox`** — cópia não-SSOT; o SSOT é a issue no Forge (ADR-001 SD14). Finding informacional não-selecionável; nunca entra em `## Transitions`.
+- **Não reclassificar `#tag`→`[[tag]]` no fix phantom (heurística 8)** — o apply é mínimo (insere espaço `#tag )`), preserva semântica de tag inclusive em `{{query}}` (per SD15). Converter para page-ref mudaria o tipo do nó no grafo.
+- **Não tentar cobrir `#[[tag com espaço]])` na heurística 8** — fora de escopo do regex (falso-negativo aceito, deferido a backlog). Delimitadores `;`/`,` idem (conservador `)`/`]`/`}`).
 - Não fazer commit em logseq-notes.
 - Não estender janela default — 30 dias é coerente com curation mensal.
 - Não confundir com `/journal-close` v0.4.1 — eixos distintos (session context vs janela cross-journal).
