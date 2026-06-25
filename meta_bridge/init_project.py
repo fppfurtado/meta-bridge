@@ -26,7 +26,7 @@ from pathlib import Path
 
 import click
 
-from . import _paths
+from . import _paths, logseq
 from .cli import cli, fail_if_logseq_open
 
 
@@ -36,7 +36,6 @@ PROJECT_TEMPLATE = _paths.PAGES_DIR / "Project Template.md"
 
 MRCONFIG_SECTION_RE = re.compile(r"^\[(.+)\]$")
 MRCONFIG_TAGS_RE = re.compile(r"^tags\s*=\s*(.+)$")
-PROP_RE_TEMPLATE = r"^\s*({prop})::\s*"
 PROPS_MECANICAS = ("cluster", "subcluster", "repo-path", "repo-host")
 TEMPLATE_WRAPPER = ("type::", "- template::", "template-including-parent::")
 MACRO_CURRENT_PAGE = "<% current page %>"
@@ -151,9 +150,7 @@ def bootstrap_from_template(basename: str) -> list[str]:
         stripped_left = line.lstrip()
         if any(stripped_left.startswith(w) for w in TEMPLATE_WRAPPER):
             continue
-        if line.startswith("\t"):
-            line = line[1:]
-        body.append(line)
+        body.append(logseq.dedent_one_level(line))
     while body and body[0].strip() == "":
         body.pop(0)
     return [line.replace(MACRO_CURRENT_PAGE, f"[[{basename}]]") for line in body]
@@ -175,17 +172,15 @@ def fill_props_in_template(
         "repo-path": str(repo_path),
         "repo-host": repo_host,
     }
-    prop_patterns = {p: re.compile(rf"^(\s*){p}::\s*$") for p in prop_values}
     out: list[str] = []
     for line in body:
-        replaced = False
-        for prop, value in prop_values.items():
-            m = prop_patterns[prop].match(line)
-            if m:
-                out.append(f"{m.group(1)}{prop}:: {value}")
-                replaced = True
-                break
-        if not replaced:
+        level, rest = logseq.indent_level(line)
+        kv = logseq.parse_property(rest)
+        # prop mecânica com valor vazio no template → preencher, preservando indent.
+        if kv is not None and kv[0] in prop_values and kv[1].strip() == "":
+            leading = line[: len(line) - len(rest)]
+            out.append(f"{leading}{kv[0]}:: {prop_values[kv[0]]}")
+        else:
             out.append(line)
     if description:
         # Adiciona bullet `- description:: <text>` antes do primeiro
@@ -217,27 +212,23 @@ def update_existing_page(
         "repo-path": str(repo_path),
         "repo-host": repo_host,
     }
-    prop_patterns = {p: re.compile(rf"^(\s*){p}::\s*(.*)$") for p in PROPS_MECANICAS}
-    any_prop_re = re.compile(r"^\s*\w[\w-]*::\s*")
     counts = {"sobrescritas": 0, "adicionadas": 0, "preservadas_humanas": 0}
     seen_props: set[str] = set()
     out: list[str] = []
     first_prop_idx: int | None = None
     for line in lines:
-        replaced = False
-        for prop in PROPS_MECANICAS:
-            m = prop_patterns[prop].match(line)
-            if m:
-                indent = m.group(1)
-                out.append(f"{indent}{prop}:: {new_values[prop]}")
-                seen_props.add(prop)
-                if first_prop_idx is None:
-                    first_prop_idx = len(out) - 1
-                counts["sobrescritas"] += 1
-                replaced = True
-                break
-        if not replaced:
-            if any_prop_re.match(line):
+        level, rest = logseq.indent_level(line)
+        kv = logseq.parse_property(rest)
+        leading = line[: len(line) - len(rest)]
+        if kv is not None and kv[0] in PROPS_MECANICAS:
+            # prop mecânica → sobrescreve valor, preserva indent.
+            out.append(f"{leading}{kv[0]}:: {new_values[kv[0]]}")
+            seen_props.add(kv[0])
+            if first_prop_idx is None:
+                first_prop_idx = len(out) - 1
+            counts["sobrescritas"] += 1
+        else:
+            if kv is not None:  # prop humana → preserva linha verbatim
                 counts["preservadas_humanas"] += 1
                 if first_prop_idx is None:
                     first_prop_idx = len(out)
