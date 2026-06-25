@@ -15,9 +15,12 @@ metadata:
        {"to": "component:default/pragmatic-dev-toolkit", "edgeType": "cc-plugin"}]
 spec:
   type: plugin
+  lifecycle: production
   owner: fppfurtado
   system: dev-toolkit
   dependsOn: # DERIVADO de constelacao.io/edges[].to — só p/ validade Backstage (on-ramp)
     - resource:default/logseq-graph
     - component:default/kl-score
     - component:default/pragmatic-dev-toolkit
+  consumesApis: # conformance de schema (per logseq-notes ADR-005 SD3) — ortogonal a tocar o Resource
+    - api:default/logseq-knowledge-layer
