@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.20.0 — 2026-06-25
+
+### Added
+
+- **`/wiki-lint`** (10ª skill — knowledge layer Camada 4 health check, ADR-001 SD16): thin orchestrator LLM-driven que consome a topologia do `kl-score` (`score --format json`, orphans/gaps) e adiciona 2 checks semânticos cross-page — contradições + stale claims intra-graph; output stdout + `pages/wiki-health.md` opcional ([#40](https://github.com/fppfurtado/meta-bridge/pull/40)).
+- **Parser block-model `meta_bridge/logseq.py`** centralizando o parsing estrutural de arquivos Logseq (indentação, buckets, block/page properties, markers GTD) antes espalhado/inconsistente entre módulos; **`rapidfuzz`** adotado para a distância de naming-drift do `/journal-review` (ADR-002 Adendo) ([#39](https://github.com/fppfurtado/meta-bridge/pull/39)).
+
+### Changed
+
+- **Write engine migrado pro parser `logseq`**: `journal_note`, `journal_close`, `journal_review` (scan) e `init_project` consomem o parser único; normalização de indentação (TAB-canonical + tolerância 4-espaços) unificada ([#39](https://github.com/fppfurtado/meta-bridge/pull/39)).
+
+### Fixed
+
+- **`/journal-review` scan — buckets com ponto**: tags como `#pje-2.1` agora corretamente atribuídas; o regex antigo `[a-z0-9-]` não as detectava e misatribuía suas tasks aos buckets vizinhos ([#39](https://github.com/fppfurtado/meta-bridge/pull/39)).
+
 ## 0.19.0 — 2026-06-24
 
 ### Added
