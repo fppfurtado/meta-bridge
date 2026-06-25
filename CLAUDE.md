@@ -12,8 +12,8 @@ Substância de write vive em **`meta_bridge` (Python CLI via Click)** — entry-
 
 - `.claude-plugin/plugin.json` — plugin manifest.
 - `.claude-plugin/marketplace.json` — exposes the plugin to `/plugin marketplace add`.
-- `pyproject.toml` + `meta_bridge/` — Python package (hatchling minimalista; dependência única `click >= 8.0`). Entry-point `mb = meta_bridge.cli:cli`.
-- `meta_bridge/{cli.py, journal_note.py, journal_close.py, journal_review.py, init_project.py, _paths.py}` — write engine + 4 subcomandos.
+- `pyproject.toml` + `meta_bridge/` — Python package (hatchling minimalista; dependências `click >= 8.0` + `rapidfuzz >= 3.0` — esta 2ª adotada para naming-drift léxico do `journal-review` per ADR-002 Adendo 2026-06-24, sob critério build-vs-adopt). Entry-point `mb = meta_bridge.cli:cli`.
+- `meta_bridge/{cli.py, journal_note.py, journal_close.py, journal_review.py, init_project.py, logseq.py, _paths.py}` — write engine + 4 subcomandos + `logseq.py` (parser block-model de arquivos Logseq que centraliza o parsing estrutural antes espalhado/inconsistente entre módulos).
 - `skills/<name>/SKILL.md` — 9 skills (`/journal-note`, `/journal-close`, `/journal-load`, `/init-logseq-project`, `/journal-review`, `/wiki-compile`, `/enrich-blocks`, `/source-digest`, `/inbox-aggregate`). 4 são thin orchestrators do CLI; `/journal-load` permanece markdown-only; `/wiki-compile` (Onda 2 do roadmap knowledge layer), `/enrich-blocks` (Onda 5 Faceta 1) e `/inbox-aggregate` seguem pattern orquestrador heurístico + sub-tool standalone em `sub-tools/<name>.py` (per meta-system ADR-017 § decomposição faceta ii; ADR-001 SD11 + SD12; `/inbox-aggregate` governada por logseq-notes ADR-004); `/source-digest` (Onda 5 Faceta 2) é thin orchestrator markdown-only sem sub-tool — digest é LLM-driven (per ADR-001 SD13).
 - `hooks/hooks.json` — `Stop` (3 entries separadas) + `SessionStart` event bindings.
 - `hooks/suggest_journal_close.py` — Stop hook auto-gated (triple gate: marker + `.claude/local/` + Logseq desktop closed); sugere `/journal-close` pós-`/run-plan`. Lógica independente do CLI.

@@ -48,6 +48,17 @@ Subcomandos:
 
 Gate `pgrep -xi logseq` (failure-closed) reusado entre os 4 subcomandos via `fail_if_logseq_open()` em `cli.py`.
 
+#### Adendo (2026-06-24) — `rapidfuzz` adotado como 2ª runtime dep; minimalismo preservado por critério build-vs-adopt
+
+Decisão original (2026-06-15) cristalizou "Dependência única: `click >= 8.0`" e § Alternativas (D) chegou a rejeitar `importlib.metadata` para evitar dependência runtime. A issue #37 (substituir Levenshtein/regex caseiros por código robusto) trouxe duas decisões de dependência distintas, resolvidas por **critério build-vs-adopt** em vez de minimalismo cego:
+
+- **`rapidfuzz` adotado** (2ª runtime dep — `dependencies = ["click>=8.0", "rapidfuzz>=3.0"]`). Substitui o `_levenshtein` caseiro (DP à mão) no naming-drift de `journal-review` por `rapidfuzz.distance.Levenshtein.distance` (default `weights=(1,1,1)` ≡ custo unitário do DP anterior, travado por teste de paridade). Critério de adoção: lib **léxica commodity madura** (MIT, C++, drop-in, sem deps transitivas pesadas), cobre só a parte léxica-determinística; o judgment **semântico** do rename-implicit permanece na SKILL.md (irredutível a distância de edição).
+- **Parser Logseq construído interno** (`meta_bridge/logseq.py`, sem dep nova) em vez de adotar lib PyPI (`LogseqMarkdownParser`, `logseq-doctor`). Critério de rejeição: lib de **parsing Logseq niche single-maintainer** no **write path** (substância central do plugin) ofereceria risco desproporcional ao ganho; o minimalismo se justifica exatamente onde a dep seria load-bearing e imatura.
+
+**Princípio destilado:** a "dependência única" não era dogma — era proxy para "não acoplar o write path a deps imaturas/pesadas". Lib léxica commodity é absorvível sem ferir a postura; lib de parsing do formato central, não. Decisão central (CLI standalone minimalista, sem framework runtime pesado) preservada; refinamento aditivo que relaxa a cardinalidade da dep com critério explícito. Materializa o Gatilho 5 (revisitar dependência impacta `pyproject.toml`) pelo ângulo de adoção pontual justificada, não troca de framework.
+
+Adendo per [ADR-034 do pragmatic-dev-toolkit](https://github.com/fppfurtado/pragmatic-dev-toolkit/blob/main/docs/decisions/ADR-034-criterio-adendo-vs-novo-adr-refinamento-doutrinal.md) critério: sem categoria nova de decisão; sem restrição externa nova; refinamento mecânico aditivo.
+
 ### Decisão 2 — Cascateamento: 4 SKILL.md viram thin orchestrators
 
 4 skills (`/journal-note`, `/journal-close`, `/journal-review`, `/init-logseq-project`) refatoradas pra **thin orchestrators**:

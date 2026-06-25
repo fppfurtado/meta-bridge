@@ -25,8 +25,9 @@ from collections import defaultdict
 from pathlib import Path
 
 import click
+from rapidfuzz.distance import Levenshtein
 
-from . import _paths
+from . import _paths, logseq
 from .cli import cli, fail_if_logseq_open
 from .journal_close import (
     TRANSITION_RE,
@@ -36,12 +37,10 @@ from .journal_close import (
 from .journal_note import bootstrap_journal, find_or_create_bucket
 
 
-BUCKET_TOP_RE = re.compile(r"^- #([a-z0-9-]+)($| )")
-# CANCELLED é terminal mas não emitido na saída (skill MD não consome) —
-# omitido do regex pra cair em NARRATIVE_RE como linha qualquer ou ignorado.
-MARKER_RE = re.compile(r"^\t- (TODO|DOING|WAITING|DONE) (.+)$")
-NARRATIVE_RE = re.compile(r"^\t- (?!TODO |DOING |WAITING |DONE )(.+)$")
-SUB_BULLET_RE = re.compile(r"^\t\t")
+# Subset de markers GTD que o scan CLASSIFICA. CANCELLED (e demais do superset
+# de logseq.GTD_MARKERS) é terminal mas não emitido na saída — cai como narrativa
+# ou é ignorado (skill MD não consome), preservando o comportamento anterior.
+SCAN_MARKERS = ("TODO", "DOING", "WAITING", "DONE")
 
 # Structural apply payload parsing (per ADR-001 SD10 Adendo v0.4.0).
 STRUCTURAL_HEADER_RE = re.compile(r"^## Structural\s*$")
@@ -114,34 +113,38 @@ def scan_journal(path: Path, date_iso: str) -> dict[str, list]:
         return out
     lines = path.read_text().splitlines()
     current_bucket: str | None = None
-    last_top_line_idx: int | None = None
 
     def collect_sub_bullets(start_idx: int) -> list[str]:
         subs = []
         for j in range(start_idx + 1, len(lines)):
-            if SUB_BULLET_RE.match(lines[j]):
+            if logseq.indent_level(lines[j])[0] >= 2:
                 subs.append(lines[j])
             else:
                 break
         return subs
 
     for i, line in enumerate(lines):
-        bm = BUCKET_TOP_RE.match(line)
-        if bm:
-            current_bucket = bm.group(1)
-            if current_bucket not in out["buckets"]:
-                out["buckets"].append(current_bucket)
-            last_top_line_idx = i
-            continue
+        level, rest = logseq.indent_level(line)
+        if not logseq.is_bullet(rest):
+            continue  # properties, blanks, non-bullets → ignorados
 
-        if current_bucket is None:
-            continue
+        if level == 0:
+            tag = logseq.bucket_tag(logseq.bullet_text(rest))
+            if tag:
+                current_bucket = tag
+                if tag not in out["buckets"]:
+                    out["buckets"].append(tag)
+            continue  # bullet top-level (bucket ou não) nunca é marker/narrativa
 
-        mm = MARKER_RE.match(line)
-        if mm:
-            marker = mm.group(1)
-            content = mm.group(2)
-            sub_bullets = collect_sub_bullets(i)
+        if current_bucket is None or level != 1:
+            continue  # markers/narrativas são só nível 1; nível ≥2 = sub_bullets
+
+        text = logseq.bullet_text(rest)
+        mk = logseq.parse_marker(text)
+        if mk and mk[0] in SCAN_MARKERS:
+            marker, content = mk
+            if not content:
+                continue  # marker sem corpo (`- TODO `) → ignorado (paridade c/ antigo)
             entry = {
                 "path": str(path),
                 "line": i + 1,
@@ -149,23 +152,23 @@ def scan_journal(path: Path, date_iso: str) -> dict[str, list]:
                 "bucket": current_bucket,
                 "marker": marker,
                 "content": content,
-                "sub_bullets": sub_bullets,
+                "sub_bullets": collect_sub_bullets(i),
             }
             if marker == "DONE":
                 out["dones"].append(entry)
-            elif marker in ("TODO", "DOING", "WAITING"):
+            else:  # TODO/DOING/WAITING
                 out["markers_open"].append(entry)
             continue
 
-        nm = NARRATIVE_RE.match(line)
-        if nm:
+        # narrativa: bullet nível 1 que não é marker do scan (inclui CANCELLED etc.)
+        if text:
             out["narratives"].append(
                 {
                     "path": str(path),
                     "line": i + 1,
                     "date": date_iso,
                     "bucket": current_bucket,
-                    "content": nm.group(1),
+                    "content": text,
                 }
             )
     return out
@@ -264,23 +267,6 @@ def emit_scan_output(
         click.echo("_(none)_")
 
 
-def _levenshtein(a: str, b: str) -> int:
-    """Distância de edição clássica (DP). Determinística — base de naming-drift."""
-    if a == b:
-        return 0
-    if not a:
-        return len(b)
-    if not b:
-        return len(a)
-    prev = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        cur = [i]
-        for j, cb in enumerate(b, 1):
-            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
-        prev = cur
-    return prev[-1]
-
-
 def compute_candidates(
     aggregate: dict[str, list],
     cooccur_min: int,
@@ -320,7 +306,9 @@ def compute_candidates(
             shared = sum(1 for _, bk in bpj if a in bk and b in bk)
             if shared >= cooccur_min:
                 cooccurrence.append((a, b, shared))
-            dist = _levenshtein(a, b)
+            # rapidfuzz com weights=(1,1,1) default ≡ custo unitário do DP caseiro
+            # anterior (ins/del/sub = 1); naming-drift é léxico-determinístico.
+            dist = Levenshtein.distance(a, b)
             coexist = first_pos[a] <= last_pos[b] and first_pos[b] <= last_pos[a]
             if 0 < dist <= namedrift_max and coexist:
                 naming_drift.append((a, b, dist))

@@ -78,15 +78,25 @@ def test_cooccurrence_threshold_override():
     assert ("a", "b", 1) in _cand(agg, cooccur_min=1)["cooccurrence"]
 
 
-# naming-drift (Levenshtein)
+# naming-drift (rapidfuzz Levenshtein — substituiu _levenshtein caseiro, #37)
 
-def test_levenshtein_basic():
-    assert jr._levenshtein("tjpa-tools", "tjpa-tool") == 1  # deleção
-    assert jr._levenshtein("abc", "abc") == 0
-    assert jr._levenshtein("", "abc") == 3                  # inserção
-    assert jr._levenshtein("abc", "abx") == 1              # substituição pura
-    assert jr._levenshtein("ab", "ba") == 2               # transposição = 2 (Levenshtein, não Damerau)
-    assert jr._levenshtein("Abc", "abc") == 1             # case-sensitive (não normaliza)
+def test_rapidfuzz_levenshtein_parity():
+    # Paridade com o DP caseiro removido: mesmos casos, mesmos valores.
+    from rapidfuzz.distance import Levenshtein
+    assert Levenshtein.distance("tjpa-tools", "tjpa-tool") == 1  # deleção
+    assert Levenshtein.distance("abc", "abc") == 0
+    assert Levenshtein.distance("", "abc") == 3                  # inserção (branch not a)
+    assert Levenshtein.distance("abc", "") == 3                  # deleção total (branch not b)
+    assert Levenshtein.distance("abc", "") == Levenshtein.distance("", "abc")  # simetria
+    assert Levenshtein.distance("abc", "abx") == 1              # substituição pura
+    assert Levenshtein.distance("ab", "ba") == 2               # transposição = 2 (Levenshtein, não Damerau)
+    assert Levenshtein.distance("Abc", "abc") == 1             # case-sensitive (não normaliza)
+    # Invariante explícito (F3 reviewer): weights default = (1,1,1) = (insert, delete,
+    # substitute) ≡ custo unitário do DP anterior. Travar a TRIPLA inteira, não só
+    # substituição — senão upgrade futuro que mude só ins/del passa silencioso.
+    assert Levenshtein.distance("abc", "abx", weights=(1, 1, 1)) == 1          # substitute
+    assert Levenshtein.distance("tjpa-tools", "tjpa-tool", weights=(1, 1, 1)) == 1  # delete
+    assert Levenshtein.distance("", "abc", weights=(1, 1, 1)) == 3             # insert
 
 
 def test_naming_drift_within_distance_and_coexisting():

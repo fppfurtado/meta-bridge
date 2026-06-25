@@ -29,7 +29,7 @@ from pathlib import Path
 
 import click
 
-from . import _paths
+from . import _paths, logseq
 from .cli import cli, fail_if_logseq_open
 from .journal_note import bootstrap_journal, find_or_create_bucket
 
@@ -37,16 +37,11 @@ from .journal_note import bootstrap_journal, find_or_create_bucket
 APPEND_HEADER = "## Append"
 TRANSITIONS_HEADER = "## Transitions"
 
-BUCKET_RE = re.compile(r"^- #([a-z0-9.-]+)($| )")
 COMMIT_HASH_RE = re.compile(r"commit:\s*([a-f0-9]{7,40})\b")
 # Separador ` | ` literal (espaço-pipe-espaço) — não usar \s* porque consumiria
 # TAB prefix do before/after (children Logseq são `\t- ...`). Body com `|`
 # literal deve vir escapado como `\|` (decodificado em _decode_escapes).
 TRANSITION_RE = re.compile(r"^- (.+?):(\d+) \| (.+) \| (.+)$")
-# Detecta children top-level — aceita TAB OU 4 espaços (normalizado pra TAB
-# antes de escrever no journal, que canonical-mente usa \t).
-TOP_CHILD_RE = re.compile(r"^(\t|    )- ")
-SUB_CHILD_RE = re.compile(r"^(\t\t|        )")
 
 
 def parse_payload(
@@ -92,11 +87,14 @@ def parse_buckets(append_md: str) -> list[tuple[str, list[str]]]:
     current_name: str | None = None
     current_children: list[str] = []
     for line in append_md.splitlines():
-        m = BUCKET_RE.match(line)
-        if m:
+        level, rest = logseq.indent_level(line)
+        tag = logseq.bucket_tag(logseq.bullet_text(rest)) if (
+            level == 0 and logseq.is_bullet(rest)
+        ) else None
+        if tag is not None:
             if current_name is not None:
                 buckets.append((current_name, current_children))
-            current_name = m.group(1)
+            current_name = tag
             current_children = []
         elif current_name is not None:
             current_children.append(line)
@@ -111,25 +109,16 @@ def parse_buckets(append_md: str) -> list[tuple[str, list[str]]]:
     return cleaned
 
 
-def _normalize_indent(line: str) -> str:
-    """Cada chunk de 4 espaços no leading whitespace → TAB. Cobre mistos
-    (4 spaces + 4 spaces → \\t\\t; \\t + 4 spaces → \\t\\t)."""
-    m = re.match(r"^(\s*)", line)
-    if not m:
-        return line
-    ws = m.group(1)
-    rest = line[len(ws) :]
-    return ws.replace("    ", "\t") + rest
-
-
 def parse_child_groups(children: list[str]) -> list[list[str]]:
-    """Agrupa linhas em [child + sub-bullets aninhados]. Group boundary é
-    `\\t- ` ou 4-spaces-` - ` top-level. Normaliza pra TAB no output."""
+    """Agrupa linhas em [child + sub-bullets aninhados]. Group boundary é um
+    bullet de nível 1 (child top-level do bucket); sub-bullets (nível ≥2) e
+    properties seguem no grupo corrente. Normaliza indent pra TAB no output."""
     groups: list[list[str]] = []
     current: list[str] = []
     for raw in children:
-        line = _normalize_indent(raw)
-        if TOP_CHILD_RE.match(line) and not SUB_CHILD_RE.match(line):
+        line = logseq.normalize_indent(raw)
+        level, rest = logseq.indent_level(line)
+        if level == 1 and logseq.is_bullet(rest):
             if current:
                 groups.append(current)
             current = [line]
@@ -143,9 +132,8 @@ def parse_child_groups(children: list[str]) -> list[list[str]]:
 def existing_commit_hashes_in_bucket(lines: list[str], bucket_idx: int) -> set[str]:
     """Scan da região do bucket — coleta hashes commit:<x> presentes."""
     hashes: set[str] = set()
-    for i in range(bucket_idx + 1, len(lines)):
-        if lines[i].startswith("- "):
-            break
+    end = logseq.bucket_region_end(lines, bucket_idx)
+    for i in range(bucket_idx + 1, end):
         m = COMMIT_HASH_RE.search(lines[i])
         if m:
             hashes.add(m.group(1))
@@ -205,11 +193,7 @@ def append_to_bucket(
     lines = journal_path.read_text().splitlines()
     existing = existing_commit_hashes_in_bucket(lines, bucket_idx)
 
-    insertion = len(lines)
-    for i in range(bucket_idx + 1, len(lines)):
-        if lines[i].startswith("- "):
-            insertion = i
-            break
+    insertion = logseq.bucket_region_end(lines, bucket_idx)
     while insertion > bucket_idx + 1 and lines[insertion - 1].strip() == "":
         insertion -= 1
 
