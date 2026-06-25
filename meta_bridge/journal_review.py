@@ -25,6 +25,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import click
+from rapidfuzz.distance import Levenshtein
 
 from . import _paths
 from .cli import cli, fail_if_logseq_open
@@ -264,23 +265,6 @@ def emit_scan_output(
         click.echo("_(none)_")
 
 
-def _levenshtein(a: str, b: str) -> int:
-    """Distância de edição clássica (DP). Determinística — base de naming-drift."""
-    if a == b:
-        return 0
-    if not a:
-        return len(b)
-    if not b:
-        return len(a)
-    prev = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        cur = [i]
-        for j, cb in enumerate(b, 1):
-            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
-        prev = cur
-    return prev[-1]
-
-
 def compute_candidates(
     aggregate: dict[str, list],
     cooccur_min: int,
@@ -320,7 +304,9 @@ def compute_candidates(
             shared = sum(1 for _, bk in bpj if a in bk and b in bk)
             if shared >= cooccur_min:
                 cooccurrence.append((a, b, shared))
-            dist = _levenshtein(a, b)
+            # rapidfuzz com weights=(1,1,1) default ≡ custo unitário do DP caseiro
+            # anterior (ins/del/sub = 1); naming-drift é léxico-determinístico.
+            dist = Levenshtein.distance(a, b)
             coexist = first_pos[a] <= last_pos[b] and first_pos[b] <= last_pos[a]
             if 0 < dist <= namedrift_max and coexist:
                 naming_drift.append((a, b, dist))
