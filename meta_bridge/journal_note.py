@@ -9,7 +9,7 @@ from pathlib import Path
 
 import click
 
-from . import _paths
+from . import _paths, logseq
 from .cli import cli, fail_if_logseq_open
 
 
@@ -59,9 +59,7 @@ def bootstrap_journal(journal_path: Path) -> None:
             or stripped.startswith("template-including-parent::")
         ):
             continue
-        if line.startswith("\t"):
-            line = line[1:]
-        body.append(line)
+        body.append(logseq.dedent_one_level(line))
     while body and body[0].strip() == "":
         body.pop(0)
     journal_path.write_text("\n".join(body) + "\n")
@@ -74,10 +72,9 @@ def find_or_create_bucket(journal_path: Path, domain: str) -> int:
     do logseq-notes — bucket = single tag + opcional espaço + sufixo).
     """
     lines = journal_path.read_text().splitlines() if journal_path.exists() else []
-    bucket_re = re.compile(rf"^- #{re.escape(domain)}($| )")
-    for idx, line in enumerate(lines):
-        if bucket_re.match(line):
-            return idx
+    idx = logseq.find_bucket_line(lines, domain)
+    if idx is not None:
+        return idx
     if lines and lines[-1] != "":
         lines.append("")
     lines.append(f"- #{domain}")
@@ -107,11 +104,7 @@ def append_child(
     child_line = f"\t- {content}"
     sub_bullets = extract_sub_bullets(content)
 
-    insertion = len(lines)
-    for i in range(bucket_idx + 1, len(lines)):
-        if lines[i].startswith("- "):
-            insertion = i
-            break
+    insertion = logseq.bucket_region_end(lines, bucket_idx)
     # Walk back sobre blank lines pra manter separador antes do próximo bucket
     # (children novos ficam contíguos aos existentes do mesmo bucket).
     while insertion > bucket_idx + 1 and lines[insertion - 1].strip() == "":
