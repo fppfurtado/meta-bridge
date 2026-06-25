@@ -1,0 +1,23 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: meta-bridge
+  description: Plugin CC materializando a Camada 3 (Bridge ao Logseq) — journals, KL wiki, source-digest, inbox.
+  annotations:
+    constelacao.io/cluster: dev-toolkit
+    constelacao.io/camada: bridge
+    constelacao.io/hub: github:fppfurtado/meta-system
+    # arestas-de-saída tipadas — FONTE AUTORITATIVA (JSON-string; lida pelo probe de drift)
+    # edgeType ∈ writes-graph|reads-graph|consumes-cli|cc-plugin|build-dep; schema opcional (writes/reads-graph)
+    constelacao.io/edges: |
+      [{"to": "resource:default/logseq-graph", "edgeType": "writes-graph", "schema": "logseq-notes-adr-003"},
+       {"to": "component:default/kl-score", "edgeType": "consumes-cli"},
+       {"to": "component:default/pragmatic-dev-toolkit", "edgeType": "cc-plugin"}]
+spec:
+  type: plugin
+  owner: fppfurtado
+  system: dev-toolkit
+  dependsOn: # DERIVADO de constelacao.io/edges[].to — só p/ validade Backstage (on-ramp)
+    - resource:default/logseq-graph
+    - component:default/kl-score
+    - component:default/pragmatic-dev-toolkit
