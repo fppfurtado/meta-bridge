@@ -37,3 +37,4 @@ from . import journal_note as _journal_note  # noqa: E402,F401 — registra @cli
 from . import journal_close as _journal_close  # noqa: E402,F401 — registra @cli.command
 from . import journal_review as _journal_review  # noqa: E402,F401 — registra @cli.command
 from . import init_project as _init_project  # noqa: E402,F401 — registra @cli.command
+from . import logseq_http_cli as _logseq_http_cli  # noqa: E402,F401 — registra @cli.command
