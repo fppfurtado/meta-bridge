@@ -59,6 +59,7 @@ Plugin Claude Code:
 - Active templates in `~/Notes/logseq/pages/`: `Project Template.md`, `daily-journal.md` (from `logseq-notes`). Templates `session-close.md` and `weekly-review.md` are archived in v0.2.0+ — skills compose in-skill.
 - **Stop hook only**: [`pragmatic-dev-toolkit`](https://github.com/fppfurtado/pragmatic-dev-toolkit) ≥ v2.13.0 installed (for the `[PRAGMATIC: plan-done]` marker emission by `/run-plan`). Hook gates silent if marker absent.
 - **SessionStart hook only**: `~/Projects/meta-system/REPOS.md` present with at least one Status=`active` repo under a `## <cluster>` section (filtro NEGATIVO excludes overview + `### Runtime auxiliar consumido externo` subsection). Hook silent if REPOS.md absent or cwd outside git.
+- **`/wiki-lint` only**: `kl-score` ≥ 0.3.0 CLI installed and on PATH (consumed via subprocess `kl-score score --format json` for graph topology — orphans/gaps). Not a Python dependency of the `meta_bridge` package. `/wiki-lint` fails closed with a clear message if absent or not runnable.
 
 Skills fail closed with clear messages when dependencies are missing — no silent corruption.
 
