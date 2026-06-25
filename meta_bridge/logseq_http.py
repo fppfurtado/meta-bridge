@@ -12,16 +12,35 @@ Sem dep nova: cliente sobre `urllib` stdlib (filosofia minimalista).
 from __future__ import annotations
 
 import json
+import sys
 import urllib.error
 import urllib.request
-from pathlib import Path
+from urllib.parse import urlparse
 
-CONFIG_PATH = Path.home() / ".config" / "meta-bridge" / "config.json"
-DEFAULT_ENDPOINT = "http://127.0.0.1:12315"
+from . import _paths
+
+CONFIG_PATH = _paths.LOGSEQ_HTTP_CONFIG_PATH
+DEFAULT_ENDPOINT = _paths.DEFAULT_LOGSEQ_HTTP_ENDPOINT
+
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 
 class LogseqHTTPError(Exception):
     """Erro traduzido da Logseq Local HTTP Server (config, conexão ou auth)."""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Bloqueia redirects: urllib reenvia `Authorization` cross-host, e o bearer
+    token concede read+write do grafo inteiro — jamais deve seguir para outro
+    host. Nenhum redirect legítimo é esperado num POST loopback `/api`."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(
+            req.full_url, code, f"redirect bloqueado para {newurl}", headers, fp
+        )
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
 
 
 def _load_config() -> tuple[str, str]:
@@ -35,6 +54,14 @@ def _load_config() -> tuple[str, str]:
             f"config ausente em {CONFIG_PATH} — criar com "
             '{"token": "<token do Local HTTP Server>"} e rodar `chmod 600`.'
         )
+    # Enforcement leve: o token concede read+write do grafo inteiro via API de
+    # plugin; permissão frouxa vaza o cognitive hub. Warning, não bloqueio.
+    if CONFIG_PATH.stat().st_mode & 0o077:
+        print(
+            f"aviso: {CONFIG_PATH} legível por outros — rodar `chmod 600` "
+            "(o token concede read+write do grafo inteiro).",
+            file=sys.stderr,
+        )
     try:
         data = json.loads(CONFIG_PATH.read_text())
     except (json.JSONDecodeError, OSError) as exc:
@@ -46,6 +73,12 @@ def _load_config() -> tuple[str, str]:
             "Local HTTP Server do Logseq."
         )
     endpoint = data.get("endpoint") or DEFAULT_ENDPOINT
+    parsed = urlparse(endpoint)
+    if parsed.scheme != "http" or parsed.hostname not in _LOOPBACK_HOSTS:
+        raise LogseqHTTPError(
+            f"endpoint {endpoint!r} não-loopback recusado — o token concede "
+            "read+write do grafo inteiro e só deve trafegar para o Logseq local."
+        )
     return endpoint, token
 
 
@@ -67,7 +100,7 @@ def _post(method: str, args: list) -> object:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with _OPENER.open(request, timeout=10) as response:
             body = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         if exc.code == 401:
@@ -89,7 +122,7 @@ def _post(method: str, args: list) -> object:
         return json.loads(body)
     except json.JSONDecodeError as exc:
         raise LogseqHTTPError(
-            f"resposta não-JSON da Logseq HTTP API para `{method}`: {body[:120]!r}"
+            f"resposta não-JSON da Logseq HTTP API para `{method}`."
         ) from exc
 
 
