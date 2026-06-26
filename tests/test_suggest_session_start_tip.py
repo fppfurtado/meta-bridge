@@ -22,6 +22,10 @@ _spec = importlib.util.spec_from_file_location("suggest_session_start_tip", HOOK
 hook = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(hook)
 
+# Parser extraído para hooks/_repos.py (ADR-001 SD17); o hook acima já inseriu
+# hooks/ no sys.path ao executar, então `_repos` resolve aqui.
+from _repos import _derive_basename  # noqa: E402
+
 
 # ---------- Unit tests: _load_owned_active ----------
 
@@ -202,17 +206,17 @@ def test_load_owned_active_collision_last_write_wins(tmp_path):
 def test_derive_basename_strips_backticks_and_expands_tilde():
     """Helper _derive_basename: strip 3-pattern + expanduser + basename."""
     # Backticks ao redor do path
-    assert hook._derive_basename("`~/Notes/logseq`") == "logseq"
+    assert _derive_basename("`~/Notes/logseq`") == "logseq"
     # Sem backticks
-    assert hook._derive_basename("~/Scripts") == "Scripts"
+    assert _derive_basename("~/Scripts") == "Scripts"
     # Tilde expansion + path com mais segmentos
-    assert hook._derive_basename("~/.local/share/chezmoi") == "chezmoi"
+    assert _derive_basename("~/.local/share/chezmoi") == "chezmoi"
     # Whitespace fora dos backticks (3-strip pattern tolera)
-    assert hook._derive_basename("  `~/Notes/logseq`  ") == "logseq"
+    assert _derive_basename("  `~/Notes/logseq`  ") == "logseq"
     # Empty/whitespace-only retorna None
-    assert hook._derive_basename("") is None
-    assert hook._derive_basename("   ") is None
-    assert hook._derive_basename("`  `") is None
+    assert _derive_basename("") is None
+    assert _derive_basename("   ") is None
+    assert _derive_basename("`  `") is None
 
 
 # ---------- E2E tests: main() in-process via monkeypatch ----------
