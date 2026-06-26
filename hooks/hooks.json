@@ -1,5 +1,5 @@
 {
-  "description": "Hooks do plugin meta-bridge — 4 trajetórias de hook bridging meta-bridge↔CC (per ADR-001 Sub-decisão 6 + Adendo 2026-06-16 + Sub-decisão 12 2026-06-20 + Sub-decisão 13 2026-06-23): Stop event sugerindo /journal-close pós-/run-plan; Stop event disparando enrichment block-flow background quando journal de hoje tem buckets recém-fechados sem provenance; Stop event sugerindo /source-digest quando journal de hoje tem clip não-digerido; SessionStart event sugerindo /journal-load quando cwd casa com repo owned/active da constelação.",
+  "description": "Hooks do plugin meta-bridge — 5 trajetórias de hook bridging meta-bridge↔CC (per ADR-001 Sub-decisão 6 + Adendo 2026-06-16 + Sub-decisão 12 2026-06-20 + Sub-decisão 13 2026-06-23 + Sub-decisão 17 2026-06-26): Stop event sugerindo /journal-close pós-/run-plan; Stop event disparando enrichment block-flow background quando journal de hoje tem buckets recém-fechados sem provenance; Stop event sugerindo /source-digest quando journal de hoje tem clip não-digerido; SessionStart event sugerindo /journal-load quando cwd casa com repo owned/active da constelação; SessionStart event sugerindo /reconcile quando cwd casa repo owned/active E journal de hoje existe.",
   "hooks": {
     "Stop": [
       {
@@ -44,6 +44,17 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_session_start_tip.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "description": "Timeout 5s — gate barato (sem rede): cwd casa REPOS.md owned/active + journal de hoje existe; sugere /reconcile (verify-state cross-store na abertura). Per ADR-001 Sub-decisão 17.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/suggest_reconcile.py",
             "timeout": 5
           }
         ]
