@@ -1,6 +1,6 @@
 ---
 name: reconcile
-description: Ritual de abertura de sessão — verify-state cross-store (Forge + NOTES + Journal) em load-time, surfando inconsistências antes de orientar. Read-only.
+description: Ritual de abertura de sessão — verify-state + dedup cross-store (Forge + NOTES + Journal) em load-time, surfando inconsistências antes de orientar. Read-only.
 disable-model-invocation: false
 ---
 
@@ -8,9 +8,9 @@ disable-model-invocation: false
 
 Skill orquestrador per [ADR-001 meta-bridge](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 17 — **ritual de abertura** de sessão (espelho do `/journal-close`, que é o fim-de-sessão). Reusa o primitivo verify-state-before-materialize (pragmatic-dev-toolkit ADR-069, hoje só em materialize-time) em **load-time**: checa o estado real dos 3 stores (Forge, annotations/NOTES, Journal) e surfa inconsistências **antes de orientar**, pra não empurrar o operador a um item já resolvido.
 
-Faceta A do reconciler (#46) — **read-only**: surfa findings, **não muta** o grafo. A escrita das reconciliações é a faceta C (#48). O dedup cross-store amplo (regras dual-entry de ADR-025) é a faceta B (#47).
+Facetas A (#46) + B (#47) do reconciler — **read-only**: surfa findings, **não muta** o grafo. A escrita das reconciliações é a faceta C (#48). A faceta B adiciona o **dedup cross-store local** (NOTES↔Journal), materializando o componente dedup do contrato [ADR-025](../../docs/decisions/ADR-001-skills-de-bridge.md) (meta-system); o dedup canônico Journal↔Forge (via listing) e as legs forge ficam deferidos a incremento futuro.
 
-Decomposição mecânico/judgment (ADR-002, padrão `/inbox-aggregate`): o subcomando determinístico `mb reconcile-check` faz parse + match; esta skill orquestra o **fetch forge** (forge-auto-detect → `gh`/`glab`) e a **apresentação editorial**. 2 checks v0: `journal_forge_closed` + `notes_encerrada`.
+Decomposição mecânico/judgment (ADR-002, padrão `/inbox-aggregate`): o subcomando determinístico `mb reconcile-check` faz parse + match; esta skill orquestra o **fetch forge** (forge-auto-detect → `gh`/`glab`) e a **apresentação editorial**. 3 checks v0, referenciados por número nos Steps abaixo: **Check 1** = `journal_forge_closed` (depende do fetch forge), **Check 2** = `notes_encerrada` (local), **Check 3** = `cross_store_dedup` (local — NOTES↔Journal, independe do fetch forge).
 
 ## Argumentos
 
@@ -24,9 +24,9 @@ Sem argumentos. Skill resolve caminhos e repos autonomamente.
 
 ### 1. Resolver journal de hoje + NOTES
 
-Journal: `~/Notes/logseq/journals/<YYYY_MM_DD>.md` (`date +%Y_%m_%d`). Ausente → só o Check 2 (NOTES) roda; seguir.
+Journal: `~/Notes/logseq/journals/<YYYY_MM_DD>.md` (`date +%Y_%m_%d`). Ausente → só o Check 2 (único que não depende do journal) roda; Checks 1 e 3 pulados; seguir.
 
-NOTES: `.claude/local/NOTES.md` no cwd (annotation store local). Ausente → Check 2 pulado; seguir.
+NOTES: `.claude/local/NOTES.md` no cwd (annotation store local). Ausente → Checks 2 e 3 (dependentes de NOTES) pulados; seguir.
 
 ### 2. Descobrir os pares `(repo, iid)` Forge-synced do journal
 
@@ -36,7 +36,7 @@ Se o journal de hoje existe (Step 1; ausente → pular para o Step 4 com `closed
 grep -nP '^\t*- (?:TODO|DOING|WAITING|NOW|LATER).*\(#\d+\)' ~/Notes/logseq/journals/<date>.md
 ```
 
-Para cada linha, o **repo** é: o bucket `#<repo>` que a contém, ou — se a task está no bucket `#inbox` — a hashtag inline `#<repo>` (contrato [SD14](../../docs/decisions/ADR-001-skills-de-bridge.md)). Acumular os pares `(repo, iid)` distintos. Sem pares → `closed_issues = {}` (Check 1 vira no-op; só o Check 2 roda).
+Para cada linha, o **repo** é: o bucket `#<repo>` que a contém, ou — se a task está no bucket `#inbox` — a hashtag inline `#<repo>` (contrato [SD14](../../docs/decisions/ADR-001-skills-de-bridge.md)). Acumular os pares `(repo, iid)` distintos. Sem pares → `closed_issues = {}` (Check 1 vira no-op; os Checks 2 e 3, locais, rodam normalmente).
 
 ### 3. Fetch do estado das issues referenciadas (read-only)
 
@@ -67,14 +67,15 @@ Agrupar os `findings` por `check` e apresentar humano-amigável:
 
 - **`journal_forge_closed`** — "Estas tasks apontam issues já fechadas no Forge — candidatas a marcar `DONE`/reconciliar:" listando `<task>` + `#<repo> (#<iid>)`.
 - **`notes_encerrada`** — "Estas entries de NOTES já estão encerradas — não re-orientar para elas:" listando `<entry>` + `<date>`.
+- **`cross_store_dedup`** — "Estes itens estão sendo rastreados em mais de um store — consolide no SSOT canonical:" listando `<item>` + `canonical_ssot` + a evidência (entry de NOTES ↔ task do journal, `match` exact/fuzzy). Orientar por domínio: `canonical_ssot: Journal` → a NOTES é scratch non-SSOT (ADR-054) → **promover-ou-descartar** a NOTES; `canonical_ssot: Forge` → a NOTES duplica um item já canonical no Forge → consolidar nele. **Nunca afirmar que existe issue no Forge sem o `(#<iid>)` confirmá-lo** (a heurística só marca Forge quando o iid está presente).
 
-Orientar: sugerir as ações (marcar a task `DONE`, fechar/arquivar, ignorar) — mas **o operador (ou a faceta C, #48) executa a escrita**; esta skill não muta. Listar `checks_skipped` + avisos de forge ao final. Sem findings → "Nenhuma inconsistência cross-store na abertura — estado coerente." Exit clean.
+Orientar: sugerir as ações (marcar a task `DONE`, fechar/arquivar, ignorar, consolidar) — mas **o operador (ou a faceta C, #48) executa a escrita**; esta skill não muta. Listar `checks_skipped` + avisos de forge ao final. Sem findings → "Nenhuma inconsistência cross-store na abertura — estado coerente." Exit clean.
 
 ## O que NÃO fazer
 
-- **Não escrever/mutar o grafo** — a faceta A é read-only; surfa findings e orienta, mas a escrita das reconciliações (marcar `DONE`, properties) é a faceta C (#48). Sem gate `pgrep` aqui justamente porque não há write.
+- **Não escrever/mutar o grafo** — as facetas A + B são read-only; surfam findings e orientam, mas a escrita das reconciliações (marcar `DONE`, properties, consolidar duplicatas) é a faceta C (#48). Sem gate `pgrep` aqui justamente porque não há write.
 - **Não fechar/editar issues no Forge** — read-only no Forge; mutações de issue seguem na UI/CLI do operador.
-- **Não fazer dedup cross-store amplo nem aplicar regras dual-entry/SSOT** — isso é a faceta B (#47), que depende do contrato ADR-025; aqui só os 2 checks v0.
+- **Não fazer o dedup canônico Journal↔Forge nem aplicar regras dual-entry/SSOT que exijam listing de issues** — o `cross_store_dedup` v0 é **local** (NOTES↔Journal); o dedup canônico (item de vida nascido no Journal, invisível ao Forge) exige listar issues abertas, fora da disciplina targeted — deferido a incremento futuro. A escrita/consolidação que muta é a faceta C (#48).
 - **Não usar `gh` para repos TJPA** — operam no GitLab; CLI é `glab` (como em `/inbox-aggregate`).
 - **Não listar todas as issues de um repo** — checar só os iids referenciados no journal (targeted); listar tudo é caro e desnecessário.
 - **Não abortar quando o forge falha** — failure-open: o Check 2 (NOTES local) roda independente; reportar o forge pulado como aviso.
