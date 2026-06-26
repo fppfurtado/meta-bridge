@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.21.0 — 2026-06-26
+
+### Added
+
+- **Write-path HTTP via Logseq Local HTTP Server** (ADR-003): módulo `meta_bridge/logseq_http.py` (thin client `urllib`) + subcomandos `mb logseq-append`/`logseq-set-prop` estáveis + `logseq-query` experimental — modalidade **aditiva** ao file-direct, opera com Logseq **aberto** (sem gate `pgrep`); substrato dos consumidores cross-store ([#45](https://github.com/fppfurtado/meta-bridge/pull/45)).
+- **`/reconcile` (11ª skill) — reconciler faceta A** (ADR-001 SD17): ritual de abertura espelho do `/journal-close` — verify-state cross-store (Forge + NOTES + Journal) em **load-time**, read-only; subcomando `mb reconcile-check` + hook SessionStart `suggest_reconcile.py` (5º hook) + helper `_repos.py` compartilhado ([#51](https://github.com/fppfurtado/meta-bridge/pull/51)).
+- **Reconciler faceta B — dedup cross-store** (ADR-001 SD18): 3º check `cross_store_dedup` no `mb reconcile-check` — read-only local-first (NOTES↔Journal, exact + fuzzy `rapidfuzz`), `canonical_ssot` por iid; materializa o componente dedup do contrato meta-system ADR-025 ([#54](https://github.com/fppfurtado/meta-bridge/pull/54)).
+- **`catalog-info.yaml`** + ponteiro no CLAUDE.md — declaração de pertencimento da constelação (meta-system ADR-024 faceta i).
+
+### Fixed
+
+- **`catalog-info.yaml`**: `consumesApis` (ADR-005 SD3) + `spec.lifecycle` — alinhamento ao modelo Resource+API.
+
+### Notes
+
+- ADR-003 (write-path HTTP via Logseq Local HTTP Server) registrado em `docs/decisions/`.
+
 ## 0.20.0 — 2026-06-25
 
 ### Added
