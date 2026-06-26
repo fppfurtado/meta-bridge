@@ -139,7 +139,7 @@ def test_cli_full(tmp_path):
     assert r.exit_code == 0
     out = json.loads(r.output)
     assert {f["check"] for f in out["findings"]} == {"journal_forge_closed", "notes_encerrada"}
-    assert out["checks_run"] == ["journal_forge_closed", "notes_encerrada"]
+    assert out["checks_run"] == ["journal_forge_closed", "notes_encerrada", "cross_store_dedup"]
 
 
 def test_cli_failure_open_empty_closed(tmp_path):
