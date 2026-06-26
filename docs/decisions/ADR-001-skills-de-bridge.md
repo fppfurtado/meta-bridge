@@ -28,7 +28,7 @@ Sem este ADR, mecânica vira convention emergente per-skill (cada uma resolve à
 
 ## Decisão
 
-**Dez sub-decisões mecânicas** que materializam as 5 skills + 1 hook da Bridge.
+**Sub-decisões mecânicas** (catálogo incremental — 17 na data corrente) que materializam as skills + hooks da Bridge.
 
 ### Sub-decisão 1 — `/journal-note` mechanics
 
@@ -990,6 +990,24 @@ Materializa Onda 6 do roadmap knowledge layer block-first do meta-system. Plugin
 **Cross-ref forge:** issue [`#19`](../../../issues/19) (Onda 6 / Camada 4 `/wiki-lint`, materializada nesta Sub-decisão).
 
 **4 critérios ADR-034 (Sub-decisão nova, não Adendo):** (i) **decisão central de SD10/SD13 intacta** — `/wiki-lint` não toca journal-review nem source-digest; é skill nova; (ii) **categoria nova justifica Sub-decisão própria** (paralelo a SD11/SD13) — health-check cross-page consumindo contrato cross-repo versionado é superfície que nenhuma sub-decisão existente cobre; (iii) **sem restrição externa nova no pacote** — kl-score é CLI externo consumido via subprocess (`kl-score score --format json`), **não** dep Python do `pyproject.toml` (3ª categoria de dependência — nem build nem pip-adopt; análoga à dep-soft de SD13 `WebFetch`/`fetch_youtube_context` com recusa graciosa via gate failure-closed); nenhum sub-tool em `sub-tools/`; (iv) **sem nova categoria de decisão** doutrinária — é materialização de skill no padrão estabelecido.
+
+### Sub-decisão 17 — Reconciler faceta A: verify-state cross-store em load-time (skill `/reconcile` + hook + subcomando)
+
+Materializa a **faceta A** de 3 do reconciler ([#42](https://github.com/fppfurtado/meta-bridge/issues/42), epic; decomposto em /triage 2026-06-26 nas facetas #46/#47/#48). O reconciler é o **ritual de abertura** de sessão (espelho do `/journal-close`, que é o fim-de-sessão): reusa o primitivo verify-state-before-materialize (pragmatic-dev-toolkit ADR-069, hoje só em materialize-time) em **load-time**, surfando inconsistências cross-store (Forge + annotations/NOTES + Journal) **antes de orientar**, pra não empurrar o operador a um item já resolvido. Filho meta-bridge do contrato de coerência cross-store (meta-system#54 / ADR-025); a faceta A **não** toca as regras dual-entry/SSOT de ADR-025 (essas são a faceta B, #47).
+
+**Forma: skill `/reconcile` (11ª skill) + subcomando determinístico `mb reconcile-check` + hook SessionStart `suggest_reconcile.py` (5º hook bridging).** Decomposição mecânico/judgment (padrão SD1 / `inbox_aggregate`): o subcomando é **puramente determinístico** (parse journal/NOTES + match), recebe as issues fechadas via `--closed-issues` JSON; a **skill** orquestra o fetch forge (resolve `#<repo>` → forge+ref via cluster lookup `~/.mrconfig`/REPOS.md; `gh`/`glab`) + a apresentação editorial. Refinamento vs esboço do plano (subprocess `gh` no subcomando): o fetch forge mora na skill — core sem rede, testável; heterogeneidade gh-vs-glab + degradação graciosa (failure-**open**) vivem na skill.
+
+**Read-only:** a faceta A surfa findings, **não muta** o grafo — sem gate `pgrep` (não há write). A escrita das reconciliações (marcar `DONE`, properties) é a faceta C (#48, via write-path HTTP ADR-003). 2 checks v0: `journal_forge_closed` (task aberta em bucket Forge-synced `#<repo>`/`#inbox` carregando `(#<iid>)` cuja issue está fechada; match por **iid** drift-proof) + `notes_encerrada` (entry NOTES com marcador `Encerrada YYYY-MM-DD` ancorado a início de bullet/linha).
+
+**Hook gate-barato (precedente SD6 Adendo v0.2.0, não SD13):** `suggest_reconcile.py` é SessionStart com gate local sem rede (cwd casa REPOS.md owned/active + journal de hoje existe) → sugere `/reconcile`; a checagem cross-store real roda na skill. Mesma trajetória SessionStart cwd↔REPOS.md de SD6 — **aciona o gatilho de generalização** que SD6 Adendo deixou pendente para a 3ª materialização: o parser REPOS.md (`_load_owned_active`/`_derive_basename`) é extraído pra `hooks/_repos.py` compartilhado entre os 2 hooks SessionStart, em vez de re-derivado.
+
+**Granularidade SD-no-catálogo vs ADR próprio:** a faceta A isolada é skill-shaped → cabe no catálogo ADR-001 como SD (padrão SD9/11/13/16). **Se** as facetas B/C trouxerem decisão estrutural de SSOT/dual-entry (B depende de ADR-025) ou de write-modality, o conceito reconciler pode ser promovido a ADR próprio então (simetria com ADR-003, irmão habilitador de #42) — SD17 deixa esse caminho aberto.
+
+**Cross-refs:** Sub-decisão 14 (contrato `#inbox` — discriminação Forge-synced vs PKM-native reusada no check 1; o reconciler **generaliza** a reconciliação além do `#inbox`, que a faceta B amplia; mecânica de match exact-title/iid vem de `inbox_aggregate` / logseq-notes ADR-004, não de SD14); Sub-decisão 6 Adendo v0.2.0 (precedente do hook SessionStart + gatilho de generalização acionado); Sub-decisão 1 (decomposição mecânico/judgment); ADR-002 (subcomando `mb` determinístico; parsing-complexo → pytest); ADR-003 (write-path HTTP — substrato da faceta C, não usado em A); pragmatic-dev-toolkit ADR-069 (primitivo verify-state-before-materialize reusado em load-time); meta-system#54 / ADR-025 (contrato pai cross-store).
+
+**Cross-ref forge:** issues [`#42`](https://github.com/fppfurtado/meta-bridge/issues/42) (epic reconciler), [`#46`](https://github.com/fppfurtado/meta-bridge/issues/46) (faceta A, materializada nesta SD); #47/#48 (facetas B/C, deferidas).
+
+**4 critérios ADR-034 (Sub-decisão nova):** (i) **decisão central de SDs existentes intacta** — `/reconcile` é skill nova, não toca journal-close/review nem o `#inbox` aggregate; (ii) **categoria nova justifica SD própria** — ritual de abertura verify-state-at-load é superfície que nenhuma SD cobre (espelho do journal-close end-of-session); (iii) **sem restrição externa nova no pacote** — `gh`/`glab` consumidos pela skill (não pelo pacote); subcomando é stdlib + click, sem dep Python nova; (iv) **sem nova categoria doutrinária** — materialização de skill+hook+subcomando no padrão estabelecido (SD1 mecânico/judgment + SD6 hook SessionStart).
 
 ## Consequências
 
