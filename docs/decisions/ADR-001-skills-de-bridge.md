@@ -28,7 +28,7 @@ Sem este ADR, mecânica vira convention emergente per-skill (cada uma resolve à
 
 ## Decisão
 
-**Sub-decisões mecânicas** (catálogo incremental — 17 na data corrente) que materializam as skills + hooks da Bridge.
+**Sub-decisões mecânicas** (catálogo incremental — 18 na data corrente) que materializam as skills + hooks da Bridge.
 
 ### Sub-decisão 1 — `/journal-note` mechanics
 
@@ -1008,6 +1008,26 @@ Materializa a **faceta A** de 3 do reconciler ([#42](https://github.com/fppfurta
 **Cross-ref forge:** issues [`#42`](https://github.com/fppfurtado/meta-bridge/issues/42) (epic reconciler), [`#46`](https://github.com/fppfurtado/meta-bridge/issues/46) (faceta A, materializada nesta SD); #47/#48 (facetas B/C, deferidas).
 
 **4 critérios ADR-034 (Sub-decisão nova):** (i) **decisão central de SDs existentes intacta** — `/reconcile` é skill nova, não toca journal-close/review nem o `#inbox` aggregate; (ii) **categoria nova justifica SD própria** — ritual de abertura verify-state-at-load é superfície que nenhuma SD cobre (espelho do journal-close end-of-session); (iii) **sem restrição externa nova no pacote** — `gh`/`glab` consumidos pela skill (não pelo pacote); subcomando é stdlib + click, sem dep Python nova; (iv) **sem nova categoria doutrinária** — materialização de skill+hook+subcomando no padrão estabelecido (SD1 mecânico/judgment + SD6 hook SessionStart).
+
+### Sub-decisão 18 — Reconciler faceta B: dedup cross-store read-only local-first (check `cross_store_dedup`)
+
+Materializa a **faceta B** de 3 do reconciler ([#47](https://github.com/fppfurtado/meta-bridge/issues/47)), sobre o esqueleto de SD17. Materializa o componente **dedup cross-store** do contrato pai meta-system#54 / ADR-025: na abertura, surfar quando o **mesmo item de pendência está co-rastreado em ≥2 stores**, orientando ao SSOT canonical por domínio (Forge = code, Journal GTD = life, NOTES = scratch non-SSOT) — sem mutar.
+
+**Forma: 3º check `cross_store_dedup` no subcomando `mb reconcile-check` + grupo de apresentação novo na skill `/reconcile` + pytest.** Sem skill/hook novo — estende os de SD17. Read-only (sem gate `pgrep`); a escrita/consolidação que muta é a faceta C (#48).
+
+**Escopo v0 — read-only local-first (decidido em /triage 2026-06-26 + corte do design-review):** o check casa **só os 2 stores locais** (NOTES↔Journal) por título — exact + fallback fuzzy `rapidfuzz` `normalized_similarity ≥ 0.85`. `canonical_ssot` por **heurística barata derivada do próprio dado**: task com `(#<iid>)` → Forge (forge-synced, confirmado); sem iid → Journal (SSOT default; NOTES é scratch non-SSOT per ADR-054). **Nunca afirma Forge para item não-confirmado** (refinamento F7 do design-review — não orientar consolidação a store não-checado). Puramente local — sem forge/listing/cluster-lookup; roda mesmo offline.
+
+**Deferido (corte deliberado):** as legs que tocam o Forge (`stale_cross_ref` NOTES→issue-fechada, `NOTES↔Forge` por iid) nasceriam quase no-op — o `closed_issues` de SD17 é montado grepando só o journal, e a forma da citação de iid em NOTES + a resolução de repo de um `#<iid>` nu não estão travadas; cortadas como a faceta A cortou o ex-Check 3 sub-suportado. O **dedup canônico Journal↔Forge** (item de vida nascido no Journal, invisível ao `/next` — a dor central de ADR-025) exige listar issues abertas, fora da disciplina targeted de SD17 — deferido a incremento de listing. O ex-Check 3 "reaparecer" (estado cross-sessão) e a escrita (faceta C) seguem deferidos.
+
+**Classificação code-vs-life = critério deferido por ADR-025 aterrissando aqui (F6):** ADR-025 §1 fixa a regra de desempate (entrada canonical no domínio do resultado pretendido) mas **defere a mecânica de detecção aos filhos**. A heurística bucket→domínio derivada do iid **é** esse critério de classificação explicitado — e sua deriva (falso-positivo/negativo de SSOT) alimenta o **critério de erosão (iii)** de ADR-025 (zona cinzenta code-vs-life). O gap de listing (item que vazou Journal↔Forge sem reconciliação) alimenta o critério de erosão **(i)**, não o (iii) — loop pai→filho fechado.
+
+**Promoção a ADR próprio NÃO disparou (cf. SD17/F8):** a faceta B v0 não trouxe decisão estrutural de SSOT/dual-entry — read-only, local, **sem persistência nova**, heurística barata derivada do dado. O caminho aberto por SD17 **permanece** para a faceta C (write-modality) ou um v1 da B com estado persistido ("reaparecer") / listing.
+
+**Cross-refs:** Sub-decisão 17 (esqueleto skill+hook+subcomando que B estende; faceta A read-only); Sub-decisão 14 (contrato `#inbox`/bucket — discriminação de domínio reusada; mecânica de match exact-title vem de `inbox_aggregate`); ADR-002 (subcomando determinístico; parsing-complexo → pytest, 17 cenários novos — 15 diretos + 2 CLI — cobrindo match exact/fuzzy + borda do threshold + `canonical_ssot` por iid); meta-system#54 / ADR-025 (contrato pai — componente dedup + dual-entry + desempate code-vs-life que esta SD materializa parcialmente).
+
+**Cross-ref forge:** issue [`#47`](https://github.com/fppfurtado/meta-bridge/issues/47) (faceta B, materializada nesta SD); #48 (faceta C, deferida).
+
+**4 critérios ADR-034 (Sub-decisão nova):** (i) **decisão central de SDs intacta** — estende SD17 (mesma skill/subcomando), não toca outras SDs; (ii) **categoria justifica SD** — dedup cross-store é check novo sobre o ritual de abertura, no padrão de catálogo (SD9/11/13/16/17); (iii) **sem restrição externa nova no pacote** — reusa `rapidfuzz` (dep já adotada para naming-drift de `journal-review`), sem dep Python nova nem subprocess; (iv) **sem nova categoria doutrinária** — materialização no padrão SD17 (mecânico/judgment; read-only).
 
 ## Consequências
 
