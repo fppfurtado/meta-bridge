@@ -66,8 +66,33 @@ Descartada: wrappers disponíveis são finos e não-mantidos; adicionar dep cont
 
 ### Backend-switch imediato no write engine (matar o gate `pgrep` agora)
 
-Descartada para este escopo: refatorar `journal_close`/`journal_note`/`logseq.py` atrás de abstração de backend é ≥3 facetas e acopla o substrato à migração das skills do plugin. Deferido como follow-up — o substrato thin prova o primitivo primeiro e desbloqueia #154/#42 sem o custo da migração.
+Descartada para o escopo original deste ADR: refatorar `journal_close`/`journal_note`/`logseq.py` atrás de abstração de backend acopla o substrato à migração das skills do plugin. Deferido como follow-up — o substrato thin prova o primitivo primeiro. Follow-up materializado em [#43](https://github.com/fppfurtado/meta-bridge/issues/43) (ver **Adendo 2026-06-28** abaixo).
 
 ### Token via `settings.json` env (precedente do secret MCP)
 
 Descartada: reusa precedente mas acopla o token de escrita do grafo ao runtime do Claude Code. Arquivo de config dedicado mantém o secret desacoplado e legível por qualquer consumidor cross-process do `mb`.
+
+## Adendo 2026-06-28 — Gate-kill das 4 skills do plugin (#43)
+
+Issue [#43](https://github.com/fppfurtado/meta-bridge/issues/43) materializa o follow-up deferido na alternativa "Backend-switch imediato" acima: os 4 subcomandos de write das skills do plugin (`mb journal-note`, `mb journal-close`, `mb journal-review --apply`, `mb init-project`) ganham **dual-path automático** — HTTP quando Logseq aberto, file-direct quando fechado. Gate `fail_if_logseq_open()` removido de todos os 4.
+
+**Padrão de implementação (ADR-001 SD20):** cada command-handler verifica `logseq_open()` (wrapper em `cli.py` sobre `pgrep -xi logseq`):
+
+```python
+if logseq_open():
+    try:
+        _cmd_via_http(...)
+    except LogseqHTTPError as exc:
+        click.echo(f"Logseq HTTP error — fechar o Logseq ou verificar o Local HTTP Server.\n{exc}", err=True)
+        sys.exit(1)
+    return
+# caminho file-direct inalterado abaixo
+```
+
+**Failure-closed no HTTP error**: `LogseqHTTPError` → mensagem clara + exit 1 (sem fallback file-direct). Rationale: fallback file-direct com Logseq aberto arriscaria escrita concorrente — exatamente o que o gate original protegia. O operador deve fechar o Logseq ou corrigir o Local HTTP Server antes de retentar.
+
+**`journal_review --apply` ungated no scan mode**: `--apply` recebe o dual-path; scan mode (sem flag) é read-only e nunca foi gated. Removido o `fail_if_logseq_open()` que aplicava gate indiscriminado.
+
+**`init-project` HTTP: YAGNI flat layout**: HTTP path usa `get_page_blocks_tree(base)` para detectar create vs update; `append_block_in_page` para criar a página se ausente; `upsert_block_property` no primeiro bloco para as 4 props mecânicas (cluster, subcluster, repo-path, repo-host). **Sem** replicação de template (sem bootstrap_from_template), sem macro substitution, sem description, sem preservação de props humanas in-place — escopo YAGNI; file-direct path permanece o caminho canônico com template para creates ricos.
+
+**Limitação SD12 (enrich-blocks hook persiste com gate)**: o hook `suggest_enrich_blocks` mantém sua gate (iii) "Logseq fechado" — o sub-tool `enrich.py` escreve file-direct; executá-lo com Logseq aberto arriscaria corrupção. Esta limitação é conhecida e documentada: o hook não dispara quando Logseq está aberto, mesmo após o gate-kill das skills. Mitigação futura: HTTP path para `enrich.py` (deferido a backlog).
