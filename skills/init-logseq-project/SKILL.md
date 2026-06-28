@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 # init-logseq-project
 
-Thin orchestrator do subcomando `mb init-project` (CLI `meta-bridge`). Skill **delega lookup mecânico de cluster** (mrconfig → REPOS.md) ao CLI e oferece **fallback `AskUserQuestion` enum** apenas quando os lookups falham. CLI faz o write substantivo (bootstrap via Project Template, dedent, macro substitution, props mecânicas idempotentes, preservação de props humanas, gate Logseq).
+Thin orchestrator do subcomando `mb init-project` (CLI `meta-bridge`). Skill **delega lookup mecânico de cluster** (mrconfig → REPOS.md) ao CLI e oferece **fallback `AskUserQuestion` enum** apenas quando os lookups falham. CLI faz o write substantivo (bootstrap via Project Template, dedent, macro substitution, props mecânicas idempotentes, preservação de props humanas) e roteia automaticamente: HTTP via Logseq Local HTTP Server quando Logseq aberto, file-direct quando fechado (ADR-003).
 
 Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 4 e [ADR-002](../../docs/decisions/ADR-002-materializacao-cli-mb.md) (cascateamento thin orchestrator). **Nota sobre F1**: implementação relaxa a polaridade estrita "CLI exige `--cluster` ou falha" — CLI tenta lookups primeiro; skill prompt é fallback do fallback. Caminho-comum: CLI resolve sozinho sem skill intervir.
 
