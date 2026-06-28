@@ -9,8 +9,9 @@ from pathlib import Path
 
 import click
 
-from . import _paths, logseq
-from .cli import cli, fail_if_logseq_open
+from . import _paths, logseq, logseq_http
+from .cli import cli, logseq_open
+from .logseq_http import LogseqHTTPError, logseq_page_name_candidates
 
 
 DAILY_JOURNAL_TEMPLATE = _paths.PAGES_DIR / "daily-journal.md"
@@ -116,6 +117,53 @@ def append_child(
     return marker_label, sub_bullets
 
 
+def _find_bucket_in_tree(tree: list, domain: str) -> dict | None:
+    """Retorna o bloco top-level cujo content é `#domain` (ou `#domain sufixo`)."""
+    prefix = f"#{domain}"
+    for block in tree:
+        if not isinstance(block, dict):
+            continue
+        c = block.get("content", "")
+        if c == prefix or c.startswith(prefix + " "):
+            return block
+    return None
+
+
+def _note_via_http(today_str: str, domain: str, content: str) -> None:
+    """Escreve nota no journal via Logseq HTTP API (Logseq aberto, ADR-003).
+
+    Encontra ou cria o bucket `#domain` como bloco top-level da página journal
+    e insere `content` como filho via `insert_block`. `LogseqHTTPError` propaga
+    para o caller traduzir em exit 1 (sem fallback file-direct — ADR-003).
+    """
+    journal_path = _paths.journal_path(today_str)
+    candidates = logseq_page_name_candidates(str(journal_path))
+    if not candidates:
+        raise LogseqHTTPError(f"não foi possível derivar nome de página para {journal_path!r}.")
+
+    tree: list = []
+    page_name = candidates[0][0]
+    for name, _label in candidates:
+        blocks = logseq_http.get_page_blocks_tree(name)
+        if blocks:
+            tree = blocks
+            page_name = name
+            break
+
+    bucket = _find_bucket_in_tree(tree, domain)
+    if bucket is None:
+        logseq_http.append_block_in_page(page_name, f"#{domain}")
+        tree = logseq_http.get_page_blocks_tree(page_name) or []
+        bucket = _find_bucket_in_tree(tree, domain)
+
+    if bucket is None:
+        raise LogseqHTTPError(f"falha ao criar/encontrar bucket #{domain} em {page_name!r}.")
+
+    logseq_http.insert_block(bucket["uuid"], content, sibling=False)
+    click.echo(f"journal: {page_name} (via HTTP)")
+    click.echo(f"bucket: #{domain}")
+
+
 def _final_content_empty(content: str) -> bool:
     """SKILL.md spec: 'conteúdo final' = input após trim E após remoção do
     marker prefix. Cobre input só whitespace e input 'TODO ' (marker sem body)."""
@@ -137,8 +185,6 @@ def _final_content_empty(content: str) -> bool:
 )
 def journal_note_cmd(content: str, domain: str | None) -> None:
     """Find-or-create hashtag-bucket no journal de hoje + append child task."""
-    fail_if_logseq_open()
-
     if _final_content_empty(content):
         click.echo(
             "conteúdo final vazio (whitespace puro ou só marker sem body) — recusado.",
@@ -166,6 +212,19 @@ def journal_note_cmd(content: str, domain: str | None) -> None:
         sys.exit(1)
 
     today = datetime.date.today().strftime("%Y_%m_%d")
+
+    if logseq_open():
+        try:
+            _note_via_http(today, resolved_domain, content)
+        except LogseqHTTPError as exc:
+            click.echo(
+                f"Logseq HTTP error — fechar o Logseq ou verificar o Local HTTP Server.\n{exc}",
+                err=True,
+            )
+            sys.exit(1)
+        return
+
+    # Caminho file-direct (Logseq fechado)
     journal_path = _paths.journal_path(today)
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     if not journal_path.exists():
