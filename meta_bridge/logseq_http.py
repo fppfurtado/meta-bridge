@@ -19,7 +19,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import _paths
+from . import _paths, logseq
 
 CONFIG_PATH = _paths.LOGSEQ_HTTP_CONFIG_PATH
 DEFAULT_ENDPOINT = _paths.DEFAULT_LOGSEQ_HTTP_ENDPOINT
@@ -168,6 +168,27 @@ def insert_block(src_block_uuid: str, content: str, sibling: bool = False) -> ob
     O Logseq serializa a escrita — sem gate `pgrep` necessário (ADR-003).
     """
     return _post("logseq.Editor.insertBlock", [src_block_uuid, content, {"sibling": sibling}])
+
+
+def insert_block_group(parent_uuid: str, group_lines: list) -> None:
+    """Insere um grupo de linhas-bullet normalizadas sob `parent_uuid`,
+    preservando o aninhamento por nível de indent.
+
+    Reconstrói via API a árvore que o file-direct escreveria como linhas
+    indentadas: nível 1 aninha sob `parent_uuid`; nível N sob o último bloco
+    do nível N-1 (o `uuid` retornado por `insertBlock`). Cada linha é uma string
+    `\\t*- <content>` (output de `logseq.normalize_indent`). Sem este reuso, os
+    sub-bullets `commit:`/`plan:` seriam perdidos no write-path HTTP.
+    """
+    parent_by_level: dict[int, str] = {0: parent_uuid}
+    for line in group_lines:
+        level, rest = logseq.indent_level(line)
+        content = logseq.bullet_text(rest) if logseq.is_bullet(rest) else rest
+        anchor = parent_by_level.get(level - 1, parent_uuid)
+        result = insert_block(anchor, content, sibling=False)
+        new_uuid = result.get("uuid") if isinstance(result, dict) else None
+        if new_uuid:
+            parent_by_level[level] = new_uuid
 
 
 def _ordinal_suffix(day: int) -> str:

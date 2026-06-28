@@ -159,9 +159,14 @@ def _note_via_http(today_str: str, domain: str, content: str) -> None:
     if bucket is None:
         raise LogseqHTTPError(f"falha ao criar/encontrar bucket #{domain} em {page_name!r}.")
 
-    logseq_http.insert_block(bucket["uuid"], content, sibling=False)
+    # Paridade com o file-direct `append_child`: child + sub-bullets mecânicos
+    # (`commit:`/`plan:`) aninhados, não só a primeira linha.
+    sub_bullets = extract_sub_bullets(content)
+    logseq_http.insert_block_group(bucket["uuid"], [f"\t- {content}", *sub_bullets])
     click.echo(f"journal: {page_name} (via HTTP)")
     click.echo(f"bucket: #{domain}")
+    if sub_bullets:
+        click.echo(f"sub-bullets: {len(sub_bullets)} mecânicos extraídos")
 
 
 def _final_content_empty(content: str) -> bool:

@@ -68,7 +68,7 @@ class TestJournalCloseGate:
         with (
             patch("meta_bridge.journal_close.logseq_open", return_value=True),
             patch("meta_bridge.journal_close._close_transitions_via_http", return_value=(1, [])) as mock_tr,
-            patch("meta_bridge.journal_close._close_append_via_http", return_value=([], 0)),
+            patch("meta_bridge.journal_close._close_append_via_http", return_value=([], 0, 0)),
         ):
             result = CliRunner().invoke(cli, ["journal-close"], input=self._PAYLOAD)
         assert result.exit_code == 0
@@ -84,6 +84,54 @@ class TestJournalCloseGate:
         ):
             result = CliRunner().invoke(cli, ["journal-close"], input=self._PAYLOAD)
         assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# journal-close HTTP append — paridade de sub-bullets + dedup por commit hash
+# ---------------------------------------------------------------------------
+
+class TestCloseAppendViaHttp:
+    # append_md = corpo do `## Append` (sem header): bucket + child + commit hash.
+    _APPEND = "- #dev\n\t- DONE fix parser\n\t\t- commit: abc1234\n"
+
+    def _run(self, tree):
+        from meta_bridge import journal_close
+
+        inserted = []
+        with (
+            patch("meta_bridge.journal_close.logseq_http.get_page_blocks_tree", return_value=tree),
+            patch(
+                "meta_bridge.journal_close.logseq_http.insert_block_group",
+                side_effect=lambda uuid, group: inserted.append((uuid, group)),
+            ),
+            patch("meta_bridge.journal_close.logseq_http.upsert_block_property"),
+        ):
+            result = journal_close._close_append_via_http(
+                self._APPEND, "2026_06_28", "2026-06-28T10:00:00"
+            )
+        return result, inserted
+
+    def test_inserts_full_group_not_just_first_line(self):
+        # Bucket #dev existe, sem nenhum commit hash → grupo inteiro é inserido.
+        tree = [{"uuid": "bkt", "content": "#dev", "children": []}]
+        (buckets, appended, dedup), inserted = self._run(tree)
+        assert buckets == ["dev"]
+        assert (appended, dedup) == (1, 0)
+        uuid, group = inserted[0]
+        assert uuid == "bkt"
+        # sub-bullet commit: preservado (não só a primeira linha do grupo)
+        assert any("commit: abc1234" in line for line in group)
+
+    def test_dedup_skips_existing_commit_hash(self):
+        # Bucket #dev já tem o commit hash abc1234 como child → dedup-skip.
+        tree = [{
+            "uuid": "bkt",
+            "content": "#dev",
+            "children": [{"uuid": "c1", "content": "commit: abc1234", "children": []}],
+        }]
+        (buckets, appended, dedup), inserted = self._run(tree)
+        assert (appended, dedup) == (0, 1)
+        assert inserted == []
 
 
 # ---------------------------------------------------------------------------

@@ -32,8 +32,6 @@ from .cli import cli, logseq_open
 from .journal_close import (
     TRANSITION_RE,
     _decode_escapes,
-    _strip_bullet_prefix,
-    _find_block_uuid_recursive,
     _close_transitions_via_http,
     apply_transition,
 )
@@ -725,6 +723,19 @@ def apply_hygiene(entries: list[tuple[str, str]]) -> tuple[int, int, list[str]]:
     return applied, skipped, msgs
 
 
+def _iter_block_contents(tree: list):
+    """Itera recursivamente o `content` de todos os blocos da árvore Logseq.
+
+    Base dos guards de idempotência HTTP de archived/hygiene — paridade barata
+    com o match textual contra a page inteira do file-direct.
+    """
+    for block in tree:
+        if not isinstance(block, dict):
+            continue
+        yield block.get("content", "")
+        yield from _iter_block_contents(block.get("children") or [])
+
+
 def _find_block_containing(tree: list, substr: str) -> tuple[str, str] | None:
     """Retorna (uuid, content) do primeiro bloco cujo content contenha `substr`.
 
@@ -758,14 +769,29 @@ def _run_apply_via_http(
         for path_str, lineno, motivo in skipped_tr:
             click.echo(f"  skipped {path_str}:{lineno} — {motivo}", err=True)
 
-    # 2. Archived buckets — append flat, sem idempotência (YAGNI HTTP path)
+    # 2. Archived buckets — find-or-create por categoria. Idempotente: #bucket
+    #    já mencionado na page → skip (paridade com apply_archived_bucket). A
+    #    estrutura de seção `## Buckets arquivados` é YAGNI no HTTP path (flat).
     if archived:
         applied_arch = 0
+        skipped_arch = 0
+        cat_contents: dict[str, list[str]] = {}
         for entry in archived:
-            logseq_http.append_block_in_page(entry["categoria"], f"#{entry['bucket']}")
+            categoria = entry["categoria"]
+            bucket = entry["bucket"]
+            if categoria not in cat_contents:
+                cat_contents[categoria] = list(
+                    _iter_block_contents(logseq_http.get_page_blocks_tree(categoria))
+                )
+            bucket_re = re.compile(rf"(?:^|\s)#{re.escape(bucket)}(?:$|\s)")
+            if any(bucket_re.search(c) for c in cat_contents[categoria]):
+                skipped_arch += 1
+                continue
+            logseq_http.append_block_in_page(categoria, f"#{bucket}")
+            cat_contents[categoria].append(f"#{bucket}")
             applied_arch += 1
-            click.echo(f"  archived: #{entry['bucket']} → {entry['categoria']}")
-        click.echo(f"structural: {applied_arch} archived (HTTP)")
+            click.echo(f"  archived: #{bucket} → {categoria}")
+        click.echo(f"structural: {applied_arch} archived, {skipped_arch} dedup-skipped (HTTP)")
 
     # 3. Emerging buckets — find-or-create no journal de hoje
     if emerging:
@@ -802,13 +828,23 @@ def _run_apply_via_http(
             click.echo(f"  emerging: #{canonical} em {journal_path.name}")
         click.echo(f"structural: {applied_emerg} emerging (HTTP)")
 
-    # 4. Hygiene — append flat por entry (sem section structure — YAGNI HTTP path)
+    # 4. Hygiene — append flat por entry. Idempotente: sugestão (match exato) já
+    #    presente → skip (paridade com apply_hygiene). Section structure por tipo
+    #    é YAGNI no HTTP path.
     if hygiene:
         applied_hyg = 0
+        skipped_hyg = 0
+        existing_hyg = set(
+            _iter_block_contents(logseq_http.get_page_blocks_tree(HYGIENE_PAGE))
+        )
         for _, suggestion in hygiene:
+            if suggestion in existing_hyg:
+                skipped_hyg += 1
+                continue
             logseq_http.append_block_in_page(HYGIENE_PAGE, suggestion)
+            existing_hyg.add(suggestion)
             applied_hyg += 1
-        click.echo(f"hygiene: {applied_hyg} sugestões aplicadas (HTTP)")
+        click.echo(f"hygiene: {applied_hyg} sugestões aplicadas, {skipped_hyg} dedup-skipped (HTTP)")
 
     # 5. Phantom fixes — substring match em content do bloco + update
     if phantom:

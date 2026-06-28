@@ -202,10 +202,35 @@ def _find_block_uuid_recursive(tree: list, content: str) -> str | None:
     return None
 
 
+def _bucket_commit_hashes(bucket_block: dict) -> set[str]:
+    """Coleta hashes `commit:<x>` da subárvore do bucket (children recursivos).
+
+    Paridade HTTP do `existing_commit_hashes_in_bucket` file-direct — base do
+    dedup por commit hash quando o journal está aberto (Logseq via API).
+    """
+    hashes: set[str] = set()
+    stack = list(bucket_block.get("children") or [])
+    while stack:
+        block = stack.pop()
+        if not isinstance(block, dict):
+            continue
+        m = COMMIT_HASH_RE.search(block.get("content", ""))
+        if m:
+            hashes.add(m.group(1))
+        stack.extend(block.get("children") or [])
+    return hashes
+
+
 def _close_append_via_http(
     append_md: str, date_str: str, closed_ts: str
-) -> tuple[list[str], int]:
-    """Aplica seção Append via HTTP. Retorna (buckets_touched, groups_appended)."""
+) -> tuple[list[str], int, int]:
+    """Aplica seção Append via HTTP.
+
+    Retorna (buckets_touched, groups_appended, groups_dedup_skipped). Paridade
+    com o file-direct `append_to_bucket`: insere o grupo inteiro (child +
+    sub-bullets `commit:`/`plan:`, via `insert_block_group`) e dedup-skip por
+    commit hash já presente no bucket.
+    """
     journal_path = _paths.journal_path(date_str)
     candidates = logseq_page_name_candidates(str(journal_path))
     if not candidates:
@@ -222,6 +247,7 @@ def _close_append_via_http(
 
     buckets_touched: list[str] = []
     appended_total = 0
+    dedup_total = 0
 
     for bucket_name, children in parse_buckets(append_md):
         groups = parse_child_groups(children)
@@ -235,14 +261,19 @@ def _close_append_via_http(
         if bucket is None:
             raise LogseqHTTPError(f"falha ao criar/encontrar bucket #{bucket_name} em {page_name!r}.")
         bucket_uuid = bucket["uuid"]
+        existing = _bucket_commit_hashes(bucket)
         for group in groups:
-            child_content = _strip_bullet_prefix(group[0])
-            logseq_http.insert_block(bucket_uuid, child_content, sibling=False)
+            hashes = group_commit_hashes(group)
+            if hashes and hashes & existing:
+                dedup_total += 1
+                continue
+            logseq_http.insert_block_group(bucket_uuid, group)
+            existing |= hashes
             appended_total += 1
         logseq_http.upsert_block_property(bucket_uuid, "closed", closed_ts)
         buckets_touched.append(bucket_name)
 
-    return buckets_touched, appended_total
+    return buckets_touched, appended_total, dedup_total
 
 
 def _close_transitions_via_http(
@@ -392,8 +423,9 @@ def journal_close_cmd(date_override: str | None) -> None:
             applied, http_skipped = _close_transitions_via_http(transitions)
             buckets_touched: list[str] = []
             appended_total = 0
+            dedup_total = 0
             if append_md:
-                buckets_touched, appended_total = _close_append_via_http(
+                buckets_touched, appended_total, dedup_total = _close_append_via_http(
                     append_md, date_str, closed_ts
                 )
         except LogseqHTTPError as exc:
@@ -411,7 +443,7 @@ def journal_close_cmd(date_override: str | None) -> None:
         click.echo(f"transitions: {applied} aplicadas, {len(http_skipped)} skipped")
         for path_str, lineno, motivo in http_skipped:
             click.echo(f"  skipped {path_str}:{lineno} — {motivo}", err=True)
-        click.echo(f"children groups: {appended_total} appended")
+        click.echo(f"children groups: {appended_total} appended, {dedup_total} dedup-skipped")
         return
 
     # Caminho file-direct (Logseq fechado)

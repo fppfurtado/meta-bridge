@@ -212,3 +212,40 @@ def test_primitives_call_correct_methods(config, monkeypatch):
         ("logseq.Editor.upsertBlockProperty", ["U", "K", "V"]),
         ("logseq.DB.datascriptQuery", ["Q"]),
     ]
+
+
+# ---------------------------------------------------------------------------
+# insert_block_group — reconstrução de aninhamento (paridade com file-direct)
+# ---------------------------------------------------------------------------
+
+def test_insert_block_group_reconstructs_nesting(monkeypatch):
+    """Sub-bullets nível 2 aninham sob o bloco-child nível 1, não sob o parent."""
+    calls = []
+    uuids = iter(["uuid-child", "uuid-sub1", "uuid-sub2"])
+
+    def fake_insert(anchor, content, sibling=False):
+        calls.append((anchor, content))
+        return {"uuid": next(uuids)}
+
+    monkeypatch.setattr(logseq_http, "insert_block", fake_insert)
+    group = ["\t- TODO fix bug", "\t\t- commit: abc1234", "\t\t- plan: do-x"]
+    logseq_http.insert_block_group("bucket-uuid", group)
+    assert calls == [
+        ("bucket-uuid", "TODO fix bug"),
+        ("uuid-child", "commit: abc1234"),
+        ("uuid-child", "plan: do-x"),
+    ]
+
+
+def test_insert_block_group_uuid_missing_falls_back_to_parent(monkeypatch):
+    """insertBlock sem uuid no retorno → sub-bullet ancora no parent (degrada,
+    não perde o dado — failure-soft de nesting)."""
+    calls = []
+    monkeypatch.setattr(
+        logseq_http,
+        "insert_block",
+        lambda anchor, content, sibling=False: calls.append((anchor, content)),
+    )
+    group = ["\t- TODO x", "\t\t- commit: deadbee"]
+    logseq_http.insert_block_group("bucket-uuid", group)
+    assert calls == [("bucket-uuid", "TODO x"), ("bucket-uuid", "commit: deadbee")]
