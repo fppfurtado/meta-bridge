@@ -145,8 +145,8 @@ def get_page_blocks_tree(page: str) -> list:
     """Retorna a árvore de blocos da página `page` (journal ou page qualquer).
 
     Cada bloco é um dict com `uuid`, `content` e `children` (lista aninhada).
-    Retorna lista vazia quando a página não existe no grafo — usado pelo
-    `reconcile-apply` como detector de nome-de-página errado (fallback ISO→ordinal).
+    Retorna lista vazia quando a página não existe no grafo — usado por
+    `resolve_journal_tree` como detector de página inexistente (create-path).
     """
     result = _post("logseq.Editor.getPageBlocksTree", [page])
     return result if isinstance(result, list) else []
@@ -287,8 +287,10 @@ def resolve_journal_page_name(journal_path: str | Path) -> str | None:
     day = _journal_day(journal_path)
     if day is None:
         return None
+    # `:block/original-name` (não `:block/name`, que vem lowercased) — round-trips
+    # no append/fetch e exibe correto para date-formats textuais (ex.: ordinal).
     result = datascript_query(
-        f"[:find ?name :where [?p :block/journal-day {day}] [?p :block/name ?name]]"
+        f"[:find ?name :where [?p :block/journal-day {day}] [?p :block/original-name ?name]]"
     )
     if isinstance(result, list) and result and isinstance(result[0], list) and result[0]:
         name = result[0][0]

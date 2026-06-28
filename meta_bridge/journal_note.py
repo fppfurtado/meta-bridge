@@ -135,8 +135,10 @@ def _note_via_http(today_str: str, domain: str, content: str) -> None:
     # (`commit:`/`plan:`) aninhados, não só a primeira linha.
     sub_bullets = extract_sub_bullets(content)
     logseq_http.insert_block_group(bucket["uuid"], [f"\t- {content}", *sub_bullets])
+    marker_match = MARKER_RE.match(content)
     click.echo(f"journal: {page_name} (via HTTP)")
     click.echo(f"bucket: #{domain}")
+    click.echo(f"marker: {marker_match.group(1) if marker_match else 'plain'}")
     if sub_bullets:
         click.echo(f"sub-bullets: {len(sub_bullets)} mecânicos extraídos")
 

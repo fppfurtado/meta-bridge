@@ -723,6 +723,46 @@ def apply_hygiene(entries: list[tuple[str, str]]) -> tuple[int, int, list[str]]:
     return applied, skipped, msgs
 
 
+def _parse_apply_payload(raw: str) -> tuple[list, list, list, list, list]:
+    """Parse do payload stdin de `--apply` → (transitions, archived, emerging,
+    hygiene, phantom). Compartilhado entre o file-direct `run_apply_mode` e o
+    path HTTP — fonte única, evita divergência de parsing/erro entre os dois.
+
+    TRANSITION_RE casa toda linha independente de seção; entries archived/emerging
+    têm 3+/2 campos sem `:linha`, não colidem. Contrato forward (Bloco 4): a skill
+    compõe `## Hygiene` SEM o shape `<path>:<linha> | <a> | <b>` (usa page-refs).
+    """
+    transitions: list[tuple[str, int, str, str]] = []
+    for line in raw.splitlines():
+        m = TRANSITION_RE.match(line)
+        if m:
+            transitions.append(
+                (
+                    m.group(1).strip(),
+                    int(m.group(2)),
+                    _decode_escapes(m.group(3)),
+                    _decode_escapes(m.group(4)),
+                )
+            )
+    archived, emerging = parse_structural(raw)
+    hygiene = parse_hygiene(raw)
+    phantom = parse_phantom(raw)
+    return transitions, archived, emerging, hygiene, phantom
+
+
+def _echo_apply_empty_error() -> None:
+    """Mensagem de erro de payload vazio/inválido — compartilhada file-direct/HTTP."""
+    click.echo(
+        "--apply: nenhuma transição nem entry structural/hygiene/phantom parseável (stdin vazio ou formato inválido). Formatos:",
+        err=True,
+    )
+    click.echo("  - <path>:<line> | <before> | <after>", err=True)
+    click.echo("  ## Structural / ### Archived buckets / - bucket | categoria | refs", err=True)
+    click.echo("  ## Structural / ### Emerging buckets / - canonical | origem", err=True)
+    click.echo("  ## Hygiene / ### Co-occurrence|Rename-implicit|Naming-drift / - sugestão", err=True)
+    click.echo("  ## Phantom fixes / - <path>:<line> | <raw-match>", err=True)
+
+
 def _iter_block_contents(tree: list):
     """Itera recursivamente o `content` de todos os blocos da árvore Logseq.
 
@@ -769,9 +809,10 @@ def _run_apply_via_http(
         for path_str, lineno, motivo in skipped_tr:
             click.echo(f"  skipped {path_str}:{lineno} — {motivo}", err=True)
 
-    # 2. Archived buckets — find-or-create por categoria. Idempotente: #bucket
-    #    já mencionado na page → skip (paridade com apply_archived_bucket). A
-    #    estrutura de seção `## Buckets arquivados` é YAGNI no HTTP path (flat).
+    # 2. Archived buckets — find-or-create por categoria + refs como sub-bullets
+    #    (paridade com apply_archived_bucket: refs path:line válidos viram filhos).
+    #    Idempotente: #bucket já mencionado na page → skip. A estrutura de seção
+    #    `## Buckets arquivados` é YAGNI no HTTP path (append flat).
     if archived:
         applied_arch = 0
         skipped_arch = 0
@@ -787,35 +828,46 @@ def _run_apply_via_http(
             if any(bucket_re.search(c) for c in cat_contents[categoria]):
                 skipped_arch += 1
                 continue
-            logseq_http.append_block_in_page(categoria, f"#{bucket}")
+            result = logseq_http.append_block_in_page(categoria, f"#{bucket}")
+            bucket_uuid = result.get("uuid") if isinstance(result, dict) else None
+            if bucket_uuid:
+                # refs path:line válidos (arquivo existe) viram filhos — mesma
+                # validação fail-soft do file-direct (refs inválidos são dropados).
+                for ref in entry.get("refs") or []:
+                    m = re.match(r"^(.+?):(\d+)$", ref)
+                    if m and Path(m.group(1)).exists():
+                        logseq_http.insert_block(bucket_uuid, ref, sibling=False)
             cat_contents[categoria].append(f"#{bucket}")
             applied_arch += 1
             click.echo(f"  archived: #{bucket} → {categoria}")
         click.echo(f"structural: {applied_arch} archived, {skipped_arch} dedup-skipped (HTTP)")
 
-    # 3. Emerging buckets — find-or-create no journal de hoje
+    # 3. Emerging buckets — find-or-create no journal de hoje + sub-bullet origem
+    #    (paridade com apply_emerging_bucket). find_or_create_bucket_block robusto
+    #    ao journal inexistente; origem idempotente (não re-insere se já presente).
     if emerging:
         today_filename = datetime.date.today().strftime("%Y_%m_%d")
-        journal_path = _paths.journal_path(today_filename)
-        page_name, tree = resolve_journal_tree(str(journal_path))
-        if page_name is None:
-            raise LogseqHTTPError(
-                f"não foi possível derivar nome de página para {journal_path!r}."
-            )
-        # Rastreia buckets criados nesta chamada para evitar re-fetch por entry.
-        created_buckets: set[str] = set()
+        journal_path = str(_paths.journal_path(today_filename))
         applied_emerg = 0
         for entry in emerging:
             canonical = entry["canonical"]
-            already = (
-                canonical in created_buckets
-                or logseq_http.find_bucket_block(tree, canonical) is not None
-            )
-            if not already:
-                logseq_http.append_block_in_page(page_name, f"#{canonical}")
-                created_buckets.add(canonical)
+            origem = entry.get("origem")
+            page_name, bucket = logseq_http.find_or_create_bucket_block(journal_path, canonical)
+            if page_name is None:
+                raise LogseqHTTPError(
+                    f"não foi possível derivar nome de página para {journal_path!r}."
+                )
+            if bucket is None:
+                raise LogseqHTTPError(f"falha ao criar/encontrar bucket #{canonical} em {page_name!r}.")
+            if origem:
+                origem_content = f"(origem: {origem})"
+                children = [
+                    c.get("content", "") for c in (bucket.get("children") or []) if isinstance(c, dict)
+                ]
+                if origem_content not in children:
+                    logseq_http.insert_block(bucket["uuid"], origem_content, sibling=False)
             applied_emerg += 1
-            click.echo(f"  emerging: #{canonical} em {journal_path.name}")
+            click.echo(f"  emerging: #{canonical} em {page_name}")
         click.echo(f"structural: {applied_emerg} emerging (HTTP)")
 
     # 4. Hygiene — append flat por entry. Idempotente: sugestão (match exato) já
@@ -882,38 +934,10 @@ def run_apply_mode() -> None:
       `### Naming-drift` (apply aditivo forward-only per SD10 Adendo 2026-06-24)
     """
     raw = sys.stdin.read()
-    # TRANSITION_RE casa toda linha do payload independente de seção; entries
-    # archived/emerging têm 3+/2 campos sem `:linha`, não colidem com o pattern.
-    # Contrato forward (Bloco 4): a skill compõe sugestões de `## Hygiene` SEM o
-    # shape `<path>:<linha> | <a> | <b>` (usa page-refs `[[...]]`) — senão uma
-    # sugestão free-text casaria TRANSITION_RE e viraria write destrutivo num journal.
-    transitions: list[tuple[str, int, str, str]] = []
-    for line in raw.splitlines():
-        m = TRANSITION_RE.match(line)
-        if m:
-            transitions.append(
-                (
-                    m.group(1).strip(),
-                    int(m.group(2)),
-                    _decode_escapes(m.group(3)),
-                    _decode_escapes(m.group(4)),
-                )
-            )
-
-    archived, emerging = parse_structural(raw)
-    hygiene = parse_hygiene(raw)
-    phantom = parse_phantom(raw)
+    transitions, archived, emerging, hygiene, phantom = _parse_apply_payload(raw)
 
     if not transitions and not archived and not emerging and not hygiene and not phantom:
-        click.echo(
-            "--apply: nenhuma transição nem entry structural/hygiene/phantom parseável (stdin vazio ou formato inválido). Formatos:",
-            err=True,
-        )
-        click.echo("  - <path>:<line> | <before> | <after>", err=True)
-        click.echo("  ## Structural / ### Archived buckets / - bucket | categoria | refs", err=True)
-        click.echo("  ## Structural / ### Emerging buckets / - canonical | origem", err=True)
-        click.echo("  ## Hygiene / ### Co-occurrence|Rename-implicit|Naming-drift / - sugestão", err=True)
-        click.echo("  ## Phantom fixes / - <path>:<line> | <raw-match>", err=True)
+        _echo_apply_empty_error()
         sys.exit(1)
 
     # Transitions primeiro (preserva semântica v0.3.0), structural depois
@@ -1003,25 +1027,9 @@ def journal_review_cmd(
         if logseq_open():
             try:
                 raw = sys.stdin.read()
-                transitions: list[tuple[str, int, str, str]] = []
-                for line in raw.splitlines():
-                    m_tr = TRANSITION_RE.match(line)
-                    if m_tr:
-                        transitions.append((
-                            m_tr.group(1).strip(),
-                            int(m_tr.group(2)),
-                            _decode_escapes(m_tr.group(3)),
-                            _decode_escapes(m_tr.group(4)),
-                        ))
-                archived, emerging = parse_structural(raw)
-                hygiene = parse_hygiene(raw)
-                phantom = parse_phantom(raw)
+                transitions, archived, emerging, hygiene, phantom = _parse_apply_payload(raw)
                 if not transitions and not archived and not emerging and not hygiene and not phantom:
-                    click.echo(
-                        "--apply: nenhuma transição nem entry structural/hygiene/phantom parseável "
-                        "(stdin vazio ou formato inválido).",
-                        err=True,
-                    )
+                    _echo_apply_empty_error()
                     sys.exit(1)
                 _run_apply_via_http(transitions, archived, emerging, hygiene, phantom)
             except LogseqHTTPError as exc:
