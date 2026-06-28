@@ -32,7 +32,7 @@ import click
 from . import _paths, logseq, logseq_http
 from .cli import cli, logseq_open
 from .journal_note import bootstrap_journal, find_or_create_bucket
-from .logseq_http import LogseqHTTPError, logseq_page_name_candidates
+from .logseq_http import LogseqHTTPError, resolve_journal_tree
 
 
 APPEND_HEADER = "## Append"
@@ -180,16 +180,6 @@ def _strip_bullet_prefix(s: str) -> str:
     return _BULLET_PREFIX_RE.sub("", s, count=1)
 
 
-def _find_bucket_block(tree: list, domain: str) -> dict | None:
-    """Retorna bloco top-level cujo content é `#domain` (ou `#domain sufixo`)."""
-    prefix = f"#{domain}"
-    return next(
-        (b for b in tree if isinstance(b, dict)
-         and (b.get("content") == prefix or b.get("content", "").startswith(prefix + " "))),
-        None,
-    )
-
-
 def _find_block_uuid_recursive(tree: list, content: str) -> str | None:
     for block in tree:
         if not isinstance(block, dict):
@@ -231,19 +221,7 @@ def _close_append_via_http(
     sub-bullets `commit:`/`plan:`, via `insert_block_group`) e dedup-skip por
     commit hash já presente no bucket.
     """
-    journal_path = _paths.journal_path(date_str)
-    candidates = logseq_page_name_candidates(str(journal_path))
-    if not candidates:
-        raise LogseqHTTPError(f"não foi possível derivar nome de página para {journal_path!r}.")
-
-    tree: list = []
-    page_name = candidates[0][0]
-    for name, _label in candidates:
-        blocks = logseq_http.get_page_blocks_tree(name)
-        if blocks:
-            tree = blocks
-            page_name = name
-            break
+    journal_path = str(_paths.journal_path(date_str))
 
     buckets_touched: list[str] = []
     appended_total = 0
@@ -253,11 +231,9 @@ def _close_append_via_http(
         groups = parse_child_groups(children)
         if not groups:
             continue
-        bucket = _find_bucket_block(tree, bucket_name)
-        if bucket is None:
-            logseq_http.append_block_in_page(page_name, f"#{bucket_name}")
-            tree = logseq_http.get_page_blocks_tree(page_name) or []
-            bucket = _find_bucket_block(tree, bucket_name)
+        page_name, bucket = logseq_http.find_or_create_bucket_block(journal_path, bucket_name)
+        if page_name is None:
+            raise LogseqHTTPError(f"não foi possível derivar nome de página para {journal_path!r}.")
         if bucket is None:
             raise LogseqHTTPError(f"falha ao criar/encontrar bucket #{bucket_name} em {page_name!r}.")
         bucket_uuid = bucket["uuid"]
@@ -290,23 +266,14 @@ def _close_transitions_via_http(
 
     for path_str, path_trans in path_groups.items():
         journal_path = Path(path_str).expanduser()
-        candidates = logseq_page_name_candidates(str(journal_path))
-        if not candidates:
+        page_name, tree = resolve_journal_tree(str(journal_path))
+        if page_name is None:
             for lineno, before, after in path_trans:
                 skipped.append((path_str, lineno, "page_name_unresolvable"))
             continue
-        tree: list = []
-        page_name = candidates[0][0]
-        for name, _label in candidates:
-            blocks = logseq_http.get_page_blocks_tree(name)
-            if blocks:
-                tree = blocks
-                page_name = name
-                break
         if not tree:
-            page_names = ",".join(n for n, _ in candidates)
             for lineno, before, after in path_trans:
-                skipped.append((path_str, lineno, f"page_not_found:{page_names}"))
+                skipped.append((path_str, lineno, f"page_not_found:{page_name}"))
             continue
         for lineno, before, after in path_trans:
             before_content = _strip_bullet_prefix(before)

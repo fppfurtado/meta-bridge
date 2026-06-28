@@ -135,8 +135,10 @@ class TestReconcileApplyCLI:
         findings = json.dumps([
             {"check": "journal_forge_closed", "task": "TODO close issue (#48)", "repo": "meta-bridge", "iid": 48},
         ])
-        with patch("meta_bridge.reconcile_apply.logseq_http.get_page_blocks_tree") as mock_tree:
-            mock_tree.side_effect = LogseqHTTPError("Logseq HTTP server não acessível")
+        with patch(
+            "meta_bridge.reconcile_apply.resolve_journal_tree",
+            side_effect=LogseqHTTPError("Logseq HTTP server não acessível"),
+        ):
             runner = CliRunner()
             result = runner.invoke(cli, [
                 "reconcile-apply",
@@ -156,7 +158,7 @@ class TestReconcileApplyCLI:
         ])
         tree = [{"uuid": "uuid-abc", "content": task_text, "children": []}]
         with (
-            patch("meta_bridge.reconcile_apply.logseq_http.get_page_blocks_tree", return_value=tree),
+            patch("meta_bridge.reconcile_apply.resolve_journal_tree", return_value=("2026/06/27", tree)),
             patch("meta_bridge.reconcile_apply.logseq_http.update_block") as mock_update,
         ):
             mock_update.return_value = None
@@ -172,37 +174,12 @@ class TestReconcileApplyCLI:
         assert task_text in output["applied"]
         mock_update.assert_called_once_with("uuid-abc", "DONE implement reconciler faceta C (#48)")
 
-    def test_fallback_ordinal_us_when_iso_returns_empty(self):
-        task_text = "TODO fallback task (#10)"
-        findings = json.dumps([
-            {"check": "journal_forge_closed", "task": task_text, "repo": "meta-bridge", "iid": 10},
-        ])
-        tree = [{"uuid": "uuid-xyz", "content": task_text, "children": []}]
-        # ISO candidate returns [] (page not found), ordinal-US candidate returns tree
-        with (
-            patch(
-                "meta_bridge.reconcile_apply.logseq_http.get_page_blocks_tree",
-                side_effect=[[], tree],
-            ) as mock_tree,
-            patch("meta_bridge.reconcile_apply.logseq_http.update_block", return_value=None),
-        ):
-            runner = CliRunner()
-            result = runner.invoke(cli, [
-                "reconcile-apply",
-                "--findings-json", findings,
-                "--journal-path", "2026_06_27.md",
-            ])
-        assert result.exit_code == 0
-        output = json.loads(result.output)
-        assert task_text in output["applied"]
-        assert mock_tree.call_count == 2
-
     def test_page_not_found_all_candidates_skipped(self):
         task_text = "TODO task not found (#7)"
         findings = json.dumps([
             {"check": "journal_forge_closed", "task": task_text, "repo": "meta-bridge", "iid": 7},
         ])
-        with patch("meta_bridge.reconcile_apply.logseq_http.get_page_blocks_tree", return_value=[]):
+        with patch("meta_bridge.reconcile_apply.resolve_journal_tree", return_value=("2026/06/27", [])):
             runner = CliRunner()
             result = runner.invoke(cli, [
                 "reconcile-apply",
@@ -223,7 +200,7 @@ class TestReconcileApplyCLI:
         ])
         tree = [{"uuid": "uuid-fail", "content": task_text, "children": []}]
         with (
-            patch("meta_bridge.reconcile_apply.logseq_http.get_page_blocks_tree", return_value=tree),
+            patch("meta_bridge.reconcile_apply.resolve_journal_tree", return_value=("2026/06/27", tree)),
             patch(
                 "meta_bridge.reconcile_apply.logseq_http.update_block",
                 side_effect=LogseqHTTPError("HTTP 500"),
@@ -247,7 +224,7 @@ class TestReconcileApplyCLI:
             {"check": "journal_forge_closed", "task": task_text, "repo": "meta-bridge", "iid": 9},
         ])
         tree = [{"uuid": "uuid-other", "content": "TODO something else (#99)", "children": []}]
-        with patch("meta_bridge.reconcile_apply.logseq_http.get_page_blocks_tree", return_value=tree):
+        with patch("meta_bridge.reconcile_apply.resolve_journal_tree", return_value=("2026/06/27", tree)):
             runner = CliRunner()
             result = runner.invoke(cli, [
                 "reconcile-apply",
@@ -268,7 +245,7 @@ class TestReconcileApplyCLI:
         ])
         tree = [{"uuid": "uuid-ok", "content": task_ok, "children": []}]
         with (
-            patch("meta_bridge.reconcile_apply.logseq_http.get_page_blocks_tree", return_value=tree),
+            patch("meta_bridge.reconcile_apply.resolve_journal_tree", return_value=("2026/06/27", tree)),
             patch("meta_bridge.reconcile_apply.logseq_http.update_block", return_value=None),
         ):
             runner = CliRunner()

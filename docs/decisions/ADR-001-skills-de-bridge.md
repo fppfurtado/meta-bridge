@@ -1059,6 +1059,8 @@ Materializa o follow-up deferido em [ADR-003](ADR-003-write-path-http-logseq-loc
 
 **`init-project` HTTP YAGNI:** `upsert_block_property` no primeiro bloco para as 4 props mecânicas (cluster, subcluster, repo-path, repo-host); sem template replication, sem macro substitution, sem description. File-direct preserva o create canônico com template.
 
+**Paridade de integridade do append + resolução por `journal-day` (validação ao vivo, 2026-06-28):** o append HTTP de `journal-note`/`journal-close` preserva sub-bullets (`insert_block_group`) e dedup por commit hash — não é YAGNI-flat (perda seria silenciosa no caminho default). A validação ao vivo revelou que o nome de página-journal depende do "Preferred date format" do Logseq (`yyyy/MM/dd` no grafo real, não ISO); resolução migrou para `logseq_http.resolve_journal_page_name` via `:block/journal-day` (robusto), adotada também pelo `reconcile-apply` (SD19, que estava latentemente quebrado neste grafo). Detalhes no [ADR-003](ADR-003-write-path-http-logseq-local-http-server.md) § Adendo 2026-06-28.
+
 **Limitação SD12 (persistente):** hook `suggest_enrich_blocks` retém sua gate (iii) "Logseq fechado" — `enrich.py` escreve file-direct; mitigação futura (HTTP path para `enrich.py`) deferida a backlog.
 
 **Sem SD nova para journal_review:** scan mode era trivialmente read-only; nenhum padrão de escrita novo emerge — apenas remoção de gate e adição de dual-path no apply mode seguindo o padrão desta SD20.

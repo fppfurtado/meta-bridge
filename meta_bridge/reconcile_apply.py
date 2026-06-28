@@ -17,7 +17,7 @@ import click
 
 from . import logseq_http
 from .cli import cli
-from .logseq_http import LogseqHTTPError, logseq_page_name_candidates
+from .logseq_http import LogseqHTTPError, resolve_journal_tree
 
 _MARKER_RE = re.compile(r"^(TODO|DOING|WAITING|NOW|LATER)\s")
 
@@ -71,25 +71,10 @@ def reconcile_apply(findings_json: str, journal_path: str) -> None:
         click.echo(json.dumps({"applied": [], "skipped": [], "error": None}, ensure_ascii=False))
         return
 
-    candidates = logseq_page_name_candidates(journal_path)
-    if not candidates:
-        click.echo(json.dumps({
-            "applied": [],
-            "skipped": [{"task": f["task"], "reason": "page_name_unresolvable"} for f in targets],
-            "error": None,
-        }, ensure_ascii=False))
-        return
-
-    # Tentar cada candidato até achar página com blocos.
-    tree: list = []
-    used_page: str | None = None
+    # Resolve o journal via journal-day (robusto ao "Preferred date format" do
+    # Logseq — yyyy/MM/dd, ISO, ordinal, etc.; guessing de formato não cobre todos).
     try:
-        for name, _label in candidates:
-            blocks = logseq_http.get_page_blocks_tree(name)
-            if blocks:
-                tree = blocks
-                used_page = name
-                break
+        used_page, tree = resolve_journal_tree(journal_path)
     except LogseqHTTPError as exc:
         click.echo(json.dumps({
             "applied": [],
@@ -98,12 +83,19 @@ def reconcile_apply(findings_json: str, journal_path: str) -> None:
         }, ensure_ascii=False))
         return
 
+    if used_page is None:
+        click.echo(json.dumps({
+            "applied": [],
+            "skipped": [{"task": f["task"], "reason": "page_name_unresolvable"} for f in targets],
+            "error": None,
+        }, ensure_ascii=False))
+        return
+
     if not tree:
-        page_names = ",".join(n for n, _ in candidates)
         click.echo(json.dumps({
             "applied": [],
             "skipped": [
-                {"task": f["task"], "reason": f"page_not_found:{page_names}"}
+                {"task": f["task"], "reason": f"page_not_found:{used_page}"}
                 for f in targets
             ],
             "error": None,

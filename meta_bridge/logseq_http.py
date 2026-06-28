@@ -217,3 +217,102 @@ def logseq_page_name_candidates(journal_path: str | Path) -> list[tuple[str, str
     month_abbr = calendar.month_abbr[month]  # ex.: "Jun"
     ordinal = f"{month_abbr} {day}{_ordinal_suffix(day)}, {year}"
     return [(iso, "ISO"), (ordinal, "ordinal-US")]
+
+
+def find_bucket_block(tree: list, domain: str) -> dict | None:
+    """Retorna o bloco top-level cujo bucket-tag é `#domain` (ou `#domain <sufixo>`).
+
+    Compara a **primeira linha** do content: quando o bucket tem properties
+    (`closed::`, etc.), o content vem como `#domain\\n<props>`, e a comparação
+    ingênua `content == '#domain'` falharia — re-runs criariam buckets duplicados.
+    """
+    prefix = f"#{domain}"
+    for block in tree:
+        if not isinstance(block, dict):
+            continue
+        first_line = block.get("content", "").split("\n", 1)[0]
+        if first_line == prefix or first_line.startswith(prefix + " "):
+            return block
+    return None
+
+
+def find_or_create_bucket_block(
+    journal_path: str | Path, domain: str
+) -> tuple[str | None, dict | None]:
+    """Resolve a página-journal e retorna `(page_name, bucket_block)` do `#domain`,
+    criando o bucket top-level se ausente.
+
+    Robusto ao create de journal **inexistente**: o 1º `appendBlockInPage` por
+    nome de data pode só materializar a página (canônica via journal-day) sem
+    landar o bloco — daí re-resolve via journal-day e faz um retry no nome
+    canônico. `page_name` None → stem inválido (caller deve abortar). `bucket`
+    None com `page_name` não-None → falha ao materializar o bucket.
+    """
+    page_name, tree = resolve_journal_tree(journal_path)
+    if page_name is None:
+        return None, None
+    bucket = find_bucket_block(tree, domain)
+    if bucket is not None:
+        return page_name, bucket
+    append_block_in_page(page_name, f"#{domain}")
+    page_name, tree = resolve_journal_tree(journal_path)
+    bucket = find_bucket_block(tree or [], domain) if page_name else None
+    if bucket is None and page_name is not None:
+        # página agora existe (canônica) mas o bucket não landou no create →
+        # retry no nome canônico, onde o append agora persiste.
+        append_block_in_page(page_name, f"#{domain}")
+        bucket = find_bucket_block(get_page_blocks_tree(page_name) or [], domain)
+    return page_name, bucket
+
+
+def _journal_day(journal_path: str | Path) -> int | None:
+    """Converte o stem `YYYY_MM_DD` no inteiro `:block/journal-day` (YYYYMMDD).
+    None se o stem não casa o formato."""
+    stem = Path(journal_path).expanduser().stem
+    try:
+        year, month, day = (int(p) for p in stem.split("_"))
+    except ValueError:
+        return None
+    return year * 10000 + month * 100 + day
+
+
+def resolve_journal_page_name(journal_path: str | Path) -> str | None:
+    """Resolve o nome canônico da página-journal via `:block/journal-day`.
+
+    Robusto ao "Preferred date format" do Logseq, que define o nome da página
+    (`yyyy/MM/dd`, ISO `yyyy-MM-dd`, ordinal-US `MMM do, yyyy`, etc.) — guessing
+    de formato (`logseq_page_name_candidates`) não cobre todos. Retorna o nome
+    canônico exato do grafo, ou None se o stem é inválido ou o journal não existe.
+    """
+    day = _journal_day(journal_path)
+    if day is None:
+        return None
+    result = datascript_query(
+        f"[:find ?name :where [?p :block/journal-day {day}] [?p :block/name ?name]]"
+    )
+    if isinstance(result, list) and result and isinstance(result[0], list) and result[0]:
+        name = result[0][0]
+        if isinstance(name, str) and name:
+            return name
+    return None
+
+
+def resolve_journal_tree(journal_path: str | Path) -> tuple[str | None, list]:
+    """Retorna `(page_name, blocks_tree)` do journal, robusto ao date-format.
+
+    Resolve o nome canônico via `journal-day` (caminho preferido — funciona com
+    o journal existente independente do formato de nome). Journal inexistente
+    recai nos candidatos de formato (`logseq_page_name_candidates`) para o
+    create-path. `page_name` None → stem inválido (caller deve abortar).
+    """
+    name = resolve_journal_page_name(journal_path)
+    if name is not None:
+        return name, get_page_blocks_tree(name)
+    candidates = logseq_page_name_candidates(journal_path)
+    if not candidates:
+        return None, []
+    for cand, _label in candidates:
+        blocks = get_page_blocks_tree(cand)
+        if blocks:
+            return cand, blocks
+    return candidates[0][0], []

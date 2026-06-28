@@ -94,12 +94,15 @@ class TestCloseAppendViaHttp:
     # append_md = corpo do `## Append` (sem header): bucket + child + commit hash.
     _APPEND = "- #dev\n\t- DONE fix parser\n\t\t- commit: abc1234\n"
 
-    def _run(self, tree):
+    def _run(self, bucket_block):
         from meta_bridge import journal_close
 
         inserted = []
         with (
-            patch("meta_bridge.journal_close.logseq_http.get_page_blocks_tree", return_value=tree),
+            patch(
+                "meta_bridge.journal_close.logseq_http.find_or_create_bucket_block",
+                return_value=("2026/06/28", bucket_block),
+            ),
             patch(
                 "meta_bridge.journal_close.logseq_http.insert_block_group",
                 side_effect=lambda uuid, group: inserted.append((uuid, group)),
@@ -113,8 +116,8 @@ class TestCloseAppendViaHttp:
 
     def test_inserts_full_group_not_just_first_line(self):
         # Bucket #dev existe, sem nenhum commit hash → grupo inteiro é inserido.
-        tree = [{"uuid": "bkt", "content": "#dev", "children": []}]
-        (buckets, appended, dedup), inserted = self._run(tree)
+        bucket = {"uuid": "bkt", "content": "#dev", "children": []}
+        (buckets, appended, dedup), inserted = self._run(bucket)
         assert buckets == ["dev"]
         assert (appended, dedup) == (1, 0)
         uuid, group = inserted[0]
@@ -124,12 +127,12 @@ class TestCloseAppendViaHttp:
 
     def test_dedup_skips_existing_commit_hash(self):
         # Bucket #dev já tem o commit hash abc1234 como child → dedup-skip.
-        tree = [{
+        bucket = {
             "uuid": "bkt",
             "content": "#dev",
             "children": [{"uuid": "c1", "content": "commit: abc1234", "children": []}],
-        }]
-        (buckets, appended, dedup), inserted = self._run(tree)
+        }
+        (buckets, appended, dedup), inserted = self._run(bucket)
         assert (appended, dedup) == (0, 1)
         assert inserted == []
 

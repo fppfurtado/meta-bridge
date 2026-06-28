@@ -36,7 +36,7 @@ from .journal_close import (
     apply_transition,
 )
 from .journal_note import bootstrap_journal, find_or_create_bucket
-from .logseq_http import LogseqHTTPError, logseq_page_name_candidates
+from .logseq_http import LogseqHTTPError, resolve_journal_tree
 
 
 # Subset de markers GTD que o scan CLASSIFICA. CANCELLED (e demais do superset
@@ -797,32 +797,22 @@ def _run_apply_via_http(
     if emerging:
         today_filename = datetime.date.today().strftime("%Y_%m_%d")
         journal_path = _paths.journal_path(today_filename)
-        candidates = logseq_page_name_candidates(str(journal_path))
-        if not candidates:
+        page_name, tree = resolve_journal_tree(str(journal_path))
+        if page_name is None:
             raise LogseqHTTPError(
                 f"não foi possível derivar nome de página para {journal_path!r}."
             )
-        tree: list = []
-        page_name = candidates[0][0]
-        for name, _ in candidates:
-            blocks = logseq_http.get_page_blocks_tree(name)
-            if blocks:
-                tree = blocks
-                page_name = name
-                break
         # Rastreia buckets criados nesta chamada para evitar re-fetch por entry.
         created_buckets: set[str] = set()
         applied_emerg = 0
         for entry in emerging:
             canonical = entry["canonical"]
-            prefix = f"#{canonical}"
-            already = canonical in created_buckets or any(
-                isinstance(b, dict)
-                and (b.get("content") == prefix or b.get("content", "").startswith(prefix + " "))
-                for b in tree
+            already = (
+                canonical in created_buckets
+                or logseq_http.find_bucket_block(tree, canonical) is not None
             )
             if not already:
-                logseq_http.append_block_in_page(page_name, prefix)
+                logseq_http.append_block_in_page(page_name, f"#{canonical}")
                 created_buckets.add(canonical)
             applied_emerg += 1
             click.echo(f"  emerging: #{canonical} em {journal_path.name}")
@@ -855,17 +845,10 @@ def _run_apply_via_http(
             by_path[e["path"]].append(e)
         for path_str, ents in by_path.items():
             p = Path(path_str).expanduser()
-            cands = logseq_page_name_candidates(str(p))
-            if cands:
-                ph_tree: list = []
-                ph_page = cands[0][0]
-                for name, _ in cands:
-                    blocks = logseq_http.get_page_blocks_tree(name)
-                    if blocks:
-                        ph_tree = blocks
-                        ph_page = name
-                        break
-            else:
+            # Journal (stem YYYY_MM_DD) → resolve por journal-day; page → None,
+            # cai no path relativo a PAGES_DIR.
+            ph_page, ph_tree = resolve_journal_tree(str(p))
+            if ph_page is None:
                 try:
                     ph_page = str(p.relative_to(_paths.PAGES_DIR))[:-3]
                 except ValueError:

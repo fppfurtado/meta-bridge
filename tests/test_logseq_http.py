@@ -249,3 +249,114 @@ def test_insert_block_group_uuid_missing_falls_back_to_parent(monkeypatch):
     group = ["\t- TODO x", "\t\t- commit: deadbee"]
     logseq_http.insert_block_group("bucket-uuid", group)
     assert calls == [("bucket-uuid", "TODO x"), ("bucket-uuid", "commit: deadbee")]
+
+
+# ---------------------------------------------------------------------------
+# resolve_journal_page_name / resolve_journal_tree — robusto ao date-format
+# ---------------------------------------------------------------------------
+
+def test_resolve_journal_page_name_via_journal_day(monkeypatch):
+    """Resolve o nome canônico (qualquer formato) via :block/journal-day."""
+    captured = {}
+
+    def fake_query(q):
+        captured["q"] = q
+        return [["2026/06/28"]]  # formato yyyy/MM/dd do grafo real
+
+    monkeypatch.setattr(logseq_http, "datascript_query", fake_query)
+    assert logseq_http.resolve_journal_page_name("~/Notes/logseq/journals/2026_06_28.md") == "2026/06/28"
+    assert "20260628" in captured["q"]  # journal-day correto
+
+
+def test_resolve_journal_page_name_invalid_stem_skips_query(monkeypatch):
+    """Stem fora de YYYY_MM_DD → None sem tocar a API."""
+    monkeypatch.setattr(
+        logseq_http, "datascript_query",
+        lambda q: (_ for _ in ()).throw(AssertionError("não deveria consultar")),
+    )
+    assert logseq_http.resolve_journal_page_name("pages/some-page.md") is None
+
+
+def test_resolve_journal_page_name_not_found(monkeypatch):
+    monkeypatch.setattr(logseq_http, "datascript_query", lambda q: [])
+    assert logseq_http.resolve_journal_page_name("2026_06_28.md") is None
+
+
+def test_resolve_journal_tree_uses_canonical_name(monkeypatch):
+    """Journal existente → (nome canônico, árvore) via journal-day."""
+    monkeypatch.setattr(logseq_http, "resolve_journal_page_name", lambda p: "2026/06/28")
+    monkeypatch.setattr(
+        logseq_http, "get_page_blocks_tree",
+        lambda name: [{"uuid": "x", "content": "#dev"}] if name == "2026/06/28" else [],
+    )
+    name, tree = logseq_http.resolve_journal_tree("2026_06_28.md")
+    assert name == "2026/06/28"
+    assert tree and tree[0]["content"] == "#dev"
+
+
+def test_resolve_journal_tree_falls_back_to_candidates(monkeypatch):
+    """Journal não resolvido por journal-day (inexistente) → candidatos de formato
+    para o create-path; sem árvore → (primeiro candidato, [])."""
+    monkeypatch.setattr(logseq_http, "resolve_journal_page_name", lambda p: None)
+    monkeypatch.setattr(logseq_http, "get_page_blocks_tree", lambda name: [])
+    name, tree = logseq_http.resolve_journal_tree("2026_06_28.md")
+    assert name == "2026-06-28"  # candidates[0][0] (ISO) como alvo de create
+    assert tree == []
+
+
+def test_resolve_journal_tree_invalid_stem_returns_none(monkeypatch):
+    """Path de page (não-journal) → (None, []) → caller cai no path de page."""
+    monkeypatch.setattr(logseq_http, "resolve_journal_page_name", lambda p: None)
+    name, tree = logseq_http.resolve_journal_tree("pages/sources/foo.md")
+    assert name is None
+    assert tree == []
+
+
+# ---------------------------------------------------------------------------
+# find_or_create_bucket_block — find-or-create robusto ao create de journal novo
+# ---------------------------------------------------------------------------
+
+def test_find_or_create_bucket_existing(monkeypatch):
+    """Bucket já presente → retorna sem nenhum append."""
+    bucket = {"uuid": "b", "content": "#dev", "children": []}
+    monkeypatch.setattr(logseq_http, "resolve_journal_tree", lambda p: ("J", [bucket]))
+    monkeypatch.setattr(
+        logseq_http, "append_block_in_page",
+        lambda *a: (_ for _ in ()).throw(AssertionError("não deveria criar")),
+    )
+    name, b = logseq_http.find_or_create_bucket_block("2026_06_28.md", "dev")
+    assert name == "J" and b is bucket
+
+
+def test_find_or_create_bucket_absent_page_exists(monkeypatch):
+    """Bucket ausente em journal existente → 1 append, encontra no re-resolve."""
+    bucket = {"uuid": "b", "content": "#dev", "children": []}
+    seq = iter([("J", []), ("J", [bucket])])
+    appends = []
+    monkeypatch.setattr(logseq_http, "resolve_journal_tree", lambda p: next(seq))
+    monkeypatch.setattr(logseq_http, "append_block_in_page", lambda page, c: appends.append((page, c)))
+    name, b = logseq_http.find_or_create_bucket_block("2026_06_28.md", "dev")
+    assert name == "J" and b is bucket
+    assert appends == [("J", "#dev")]  # exatamente 1 append
+
+
+def test_find_or_create_bucket_new_journal_retries(monkeypatch):
+    """Journal inexistente: 1º append materializa página vazia (bloco não landa);
+    re-resolve via journal-day + retry no nome canônico → encontra."""
+    bucket = {"uuid": "b", "content": "#dev", "children": []}
+    # ambos os resolves retornam árvore vazia (página criada mas bucket não landou)
+    seq = iter([("2026-06-28", []), ("2026/06/28", [])])
+    appends = []
+    monkeypatch.setattr(logseq_http, "resolve_journal_tree", lambda p: next(seq))
+    monkeypatch.setattr(logseq_http, "append_block_in_page", lambda page, c: appends.append((page, c)))
+    monkeypatch.setattr(logseq_http, "get_page_blocks_tree", lambda name: [bucket])
+    name, b = logseq_http.find_or_create_bucket_block("2026_06_28.md", "dev")
+    assert name == "2026/06/28" and b is bucket
+    # 2 appends: 1º (ISO, materializa página) + retry (canônico, landa o bucket)
+    assert appends == [("2026-06-28", "#dev"), ("2026/06/28", "#dev")]
+
+
+def test_find_or_create_bucket_invalid_stem(monkeypatch):
+    monkeypatch.setattr(logseq_http, "resolve_journal_tree", lambda p: (None, []))
+    name, b = logseq_http.find_or_create_bucket_block("pages/foo.md", "dev")
+    assert name is None and b is None
