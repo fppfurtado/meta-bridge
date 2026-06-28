@@ -18,6 +18,9 @@ def _logseq_open() -> bool:
     return result.returncode == 0
 
 
+logseq_open = _logseq_open
+
+
 def fail_if_logseq_open() -> None:
     if _logseq_open():
         click.echo(

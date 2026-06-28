@@ -9,15 +9,15 @@ import pytest
 from click.testing import CliRunner
 
 from meta_bridge.cli import cli
+from meta_bridge.logseq_http import logseq_page_name_candidates as _derive_logseq_page_name
 from meta_bridge.reconcile_apply import (
-    _derive_logseq_page_name,
     _find_block_uuid,
     _mark_done,
 )
 
 
 # ---------------------------------------------------------------------------
-# _derive_logseq_page_name
+# logseq_page_name_candidates (formerly _derive_logseq_page_name)
 # ---------------------------------------------------------------------------
 
 class TestDeriveLogseqPageName:

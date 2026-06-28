@@ -11,10 +11,12 @@ Sem dep nova: cliente sobre `urllib` stdlib (filosofia minimalista).
 
 from __future__ import annotations
 
+import calendar
 import json
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import urlparse
 
 from . import _paths
@@ -153,7 +155,44 @@ def get_page_blocks_tree(page: str) -> list:
 def update_block(uuid: str, content: str) -> object:
     """Atualiza o conteúdo do bloco `uuid` para `content`.
 
-    Usado pelo `reconcile-apply` para marcar tasks como `DONE` no journal.
     O Logseq serializa a escrita — sem gate `pgrep` necessário (ADR-003).
     """
     return _post("logseq.Editor.updateBlock", [uuid, content])
+
+
+def insert_block(src_block_uuid: str, content: str, sibling: bool = False) -> object:
+    """Insere um bloco relativo ao bloco `src_block_uuid`.
+
+    `sibling=False` (default) → filho do bloco src.
+    `sibling=True` → irmão após o bloco src.
+    O Logseq serializa a escrita — sem gate `pgrep` necessário (ADR-003).
+    """
+    return _post("logseq.Editor.insertBlock", [src_block_uuid, content, {"sibling": sibling}])
+
+
+def _ordinal_suffix(day: int) -> str:
+    if 11 <= day <= 13:
+        return "th"
+    return {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+
+
+def logseq_page_name_candidates(journal_path: str | Path) -> list[tuple[str, str]]:
+    """Retorna candidatos de nome de página Logseq para um journal path.
+
+    Retorna `[(name, label)]` em ordem de tentativa:
+    1. ISO `YYYY-MM-DD` — formato padrão mais comum no Logseq.
+    2. Ordinal US `Mon DDth, YYYY` — formato alternativo (ex.: `Jun 27th, 2026`).
+
+    O chamador tenta cada candidato via `get_page_blocks_tree`; usa o primeiro
+    que retorna lista não-vazia. Lista vazia → página não encontrada no grafo.
+    Retorna lista vazia para stems inválidos (não no formato `YYYY_MM_DD`).
+    """
+    stem = Path(journal_path).expanduser().stem  # ex.: "2026_06_27"
+    try:
+        year, month, day = (int(p) for p in stem.split("_"))
+    except ValueError:
+        return []
+    iso = f"{year:04d}-{month:02d}-{day:02d}"
+    month_abbr = calendar.month_abbr[month]  # ex.: "Jun"
+    ordinal = f"{month_abbr} {day}{_ordinal_suffix(day)}, {year}"
+    return [(iso, "ISO"), (ordinal, "ordinal-US")]
