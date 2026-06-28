@@ -39,3 +39,4 @@ from . import journal_review as _journal_review  # noqa: E402,F401 — registra 
 from . import init_project as _init_project  # noqa: E402,F401 — registra @cli.command
 from . import logseq_http_cli as _logseq_http_cli  # noqa: E402,F401 — registra @cli.command
 from . import reconcile_check as _reconcile_check  # noqa: E402,F401 — registra @cli.command
+from . import reconcile_apply as _reconcile_apply  # noqa: E402,F401 — registra @cli.command

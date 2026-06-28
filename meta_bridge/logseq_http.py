@@ -137,3 +137,23 @@ def upsert_block_property(block_uuid: str, key: str, value: str) -> object:
 
 def datascript_query(query: str) -> object:
     return _post("logseq.DB.datascriptQuery", [query])
+
+
+def get_page_blocks_tree(page: str) -> list:
+    """Retorna a árvore de blocos da página `page` (journal ou page qualquer).
+
+    Cada bloco é um dict com `uuid`, `content` e `children` (lista aninhada).
+    Retorna lista vazia quando a página não existe no grafo — usado pelo
+    `reconcile-apply` como detector de nome-de-página errado (fallback ISO→ordinal).
+    """
+    result = _post("logseq.Editor.getPageBlocksTree", [page])
+    return result if isinstance(result, list) else []
+
+
+def update_block(uuid: str, content: str) -> object:
+    """Atualiza o conteúdo do bloco `uuid` para `content`.
+
+    Usado pelo `reconcile-apply` para marcar tasks como `DONE` no journal.
+    O Logseq serializa a escrita — sem gate `pgrep` necessário (ADR-003).
+    """
+    return _post("logseq.Editor.updateBlock", [uuid, content])

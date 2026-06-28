@@ -1,6 +1,6 @@
 ---
 name: reconcile
-description: Ritual de abertura de sessão — verify-state + dedup cross-store (Forge + NOTES + Journal) em load-time, surfando inconsistências antes de orientar. Read-only.
+description: Ritual de abertura de sessão — verify-state + dedup cross-store (Forge + NOTES + Journal) em load-time, surfando inconsistências antes de orientar. Oferece escrita de reconciliações journal_forge_closed via HTTP (faceta C).
 disable-model-invocation: false
 ---
 
@@ -8,7 +8,7 @@ disable-model-invocation: false
 
 Skill orquestrador per [ADR-001 meta-bridge](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 17 — **ritual de abertura** de sessão (espelho do `/journal-close`, que é o fim-de-sessão). Reusa o primitivo verify-state-before-materialize (pragmatic-dev-toolkit ADR-069, hoje só em materialize-time) em **load-time**: checa o estado real dos 3 stores (Forge, annotations/NOTES, Journal) e surfa inconsistências **antes de orientar**, pra não empurrar o operador a um item já resolvido.
 
-Facetas A (#46) + B (#47) do reconciler — **read-only**: surfa findings, **não muta** o grafo. A escrita das reconciliações é a faceta C (#48). A faceta B adiciona o **dedup cross-store local** (NOTES↔Journal), materializando o componente dedup do contrato [ADR-025](../../docs/decisions/ADR-001-skills-de-bridge.md) (meta-system); o dedup canônico Journal↔Forge (via listing) e as legs forge ficam deferidos a incremento futuro.
+Facetas A (#46) + B (#47) do reconciler fazem o **verify-state + dedup** (read-only). A faceta C (#48, ADR-001 SD19) fecha o loop: após surfar os findings, a skill oferece aplicar automaticamente as reconciliações `journal_forge_closed` — marcando tasks `DONE` no journal via `mb reconcile-apply` (write-path HTTP, ADR-003). Writes de `cross_store_dedup` (manipulação de NOTES) ficam deferidos. A faceta B adiciona o **dedup cross-store local** (NOTES↔Journal), materializando o componente dedup do contrato [ADR-025](../../docs/decisions/ADR-001-skills-de-bridge.md) (meta-system); o dedup canônico Journal↔Forge (via listing) e as legs forge ficam deferidos a incremento futuro.
 
 Decomposição mecânico/judgment (ADR-002, padrão `/inbox-aggregate`): o subcomando determinístico `mb reconcile-check` faz parse + match; esta skill orquestra o **fetch forge** (forge-auto-detect → `gh`/`glab`) e a **apresentação editorial**. 3 checks v0, referenciados por número nos Steps abaixo: **Check 1** = `journal_forge_closed` (depende do fetch forge), **Check 2** = `notes_encerrada` (local), **Check 3** = `cross_store_dedup` (local — NOTES↔Journal, independe do fetch forge).
 
@@ -69,13 +69,38 @@ Agrupar os `findings` por `check` e apresentar humano-amigável:
 - **`notes_encerrada`** — "Estas entries de NOTES já estão encerradas — não re-orientar para elas:" listando `<entry>` + `<date>`.
 - **`cross_store_dedup`** — "Estes itens estão sendo rastreados em mais de um store — consolide no SSOT canonical:" listando `<item>` + `canonical_ssot` + a evidência (entry de NOTES ↔ task do journal, `match` exact/fuzzy). Orientar por domínio: `canonical_ssot: Journal` → a NOTES é scratch non-SSOT (ADR-054) → **promover-ou-descartar** a NOTES; `canonical_ssot: Forge` → a NOTES duplica um item já canonical no Forge → consolidar nele. **Nunca afirmar que existe issue no Forge sem o `(#<iid>)` confirmá-lo** (a heurística só marca Forge quando o iid está presente).
 
-Orientar: sugerir as ações (marcar a task `DONE`, fechar/arquivar, ignorar, consolidar) — mas **o operador (ou a faceta C, #48) executa a escrita**; esta skill não muta. Listar `checks_skipped` + avisos de forge ao final. Sem findings → "Nenhuma inconsistência cross-store na abertura — estado coerente." Exit clean.
+Orientar: sugerir as ações (marcar a task `DONE`, fechar/arquivar, ignorar, consolidar). Listar `checks_skipped` + avisos de forge ao final. Sem findings → "Nenhuma inconsistência cross-store na abertura — estado coerente." **Sempre seguir para o Step 6** (independentemente de findings — o Step 6 verifica internamente se há `journal_forge_closed` para agir).
+
+### 6. Aplicar reconciliações `journal_forge_closed` (faceta C)
+
+Se não há findings `journal_forge_closed` → skip silente.
+
+**Gate config HTTP:** verificar se `~/.config/meta-bridge/config.json` existe. Ausente → informar ("Local HTTP Server não configurado — aplicar manualmente via UI do Logseq") + skip; não abortar.
+
+**Confirmar por grupo:** listar as tasks candidatas e perguntar via `AskUserQuestion` (header `Aplicar reconciliações`, opções `Aplicar (marcar DONE)` / `Pular (aplicar depois)`).
+
+`Aplicar`: invocar o subcomando determinístico passando o **array `findings`** da saída do Step 4 (não o objeto completo — o subcomando espera uma lista de dicts de finding) e o path do journal:
+
+```bash
+mb reconcile-apply \
+  --findings-json '<saída_step4.findings como JSON array>' \
+  --journal-path ~/Notes/logseq/journals/<date>.md
+```
+
+**Apresentar resultado:** ler os campos `applied`, `skipped` e `error` do JSON de stdout:
+
+- Se `error` não-null ou `skipped` não-vazio → exibir bloco de alerta **antes** do resumo: "⚠ N task(s) não aplicada(s) — verifique se Logseq está aberto com o Local HTTP Server habilitado e o token válido." Listar o campo `skipped[].reason` por task quando disponível.
+- Resumir `applied` apenas se não-vazio: "Marcadas como DONE: [lista de tasks]."
+- Se `applied` vazio, `skipped` vazio e `error` null → reportar: "Nenhuma task aplicada — nenhum finding `journal_forge_closed` filtrado pelo subcomando. Verificar se o JSON passado continha os findings esperados."
+
+`Pular` → encerrar sem mutação.
 
 ## O que NÃO fazer
 
-- **Não escrever/mutar o grafo** — as facetas A + B são read-only; surfam findings e orientam, mas a escrita das reconciliações (marcar `DONE`, properties, consolidar duplicatas) é a faceta C (#48). Sem gate `pgrep` aqui justamente porque não há write.
+- **Não escrever via file-direct** — a faceta C usa **exclusivamente** o write-path HTTP (`mb reconcile-apply`); não há gate `pgrep` porque o Logseq precisa estar aberto para o HTTP funcionar.
 - **Não fechar/editar issues no Forge** — read-only no Forge; mutações de issue seguem na UI/CLI do operador.
-- **Não fazer o dedup canônico Journal↔Forge nem aplicar regras dual-entry/SSOT que exijam listing de issues** — o `cross_store_dedup` v0 é **local** (NOTES↔Journal); o dedup canônico (item de vida nascido no Journal, invisível ao Forge) exige listar issues abertas, fora da disciplina targeted — deferido a incremento futuro. A escrita/consolidação que muta é a faceta C (#48).
+- **Não aplicar writes de `cross_store_dedup`** — descarte/promoção de entries de NOTES é destrutivo e exige decisão por item; deferido a incremento futuro.
+- **Não fazer o dedup canônico Journal↔Forge nem aplicar regras dual-entry/SSOT que exijam listing de issues** — o `cross_store_dedup` v0 é **local** (NOTES↔Journal); o dedup canônico exige listar issues abertas, fora da disciplina targeted — deferido.
 - **Não usar `gh` para repos TJPA** — operam no GitLab; CLI é `glab` (como em `/inbox-aggregate`).
 - **Não listar todas as issues de um repo** — checar só os iids referenciados no journal (targeted); listar tudo é caro e desnecessário.
 - **Não abortar quando o forge falha** — failure-open: o Check 2 (NOTES local) roda independente; reportar o forge pulado como aviso.

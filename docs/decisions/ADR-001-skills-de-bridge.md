@@ -1029,11 +1029,33 @@ Materializa a **faceta B** de 3 do reconciler ([#47](https://github.com/fppfurta
 
 **4 critérios ADR-034 (Sub-decisão nova):** (i) **decisão central de SDs intacta** — estende SD17 (mesma skill/subcomando), não toca outras SDs; (ii) **categoria justifica SD** — dedup cross-store é check novo sobre o ritual de abertura, no padrão de catálogo (SD9/11/13/16/17); (iii) **sem restrição externa nova no pacote** — reusa `rapidfuzz` (dep já adotada para naming-drift de `journal-review`), sem dep Python nova nem subprocess; (iv) **sem nova categoria doutrinária** — materialização no padrão SD17 (mecânico/judgment; read-only).
 
+### Sub-decisão 19 — Reconciler faceta C: write-modality `mb reconcile-apply`
+
+Materializa a **faceta C** de 3 do reconciler ([#48](https://github.com/fppfurtado/meta-bridge/issues/48)), fechando o loop lido por SD17+SD18: após surfar os findings de `journal_forge_closed`, a skill `/reconcile` oferece aplicar as reconciliações automaticamente — marcando tasks `DONE` no journal via write-path HTTP (ADR-003).
+
+**Forma: subcomando determinístico `mb reconcile-apply` + Step 6 na skill `/reconcile` + pytest.** Sem skill/hook novo — estende a skill de SD17 (Step 6 adicionado ao orquestrador) e o pacote Python (módulo `reconcile_apply.py` + registro em `cli.py`). Padrão ADR-002 (subcomando mecânico + pytest); write-path via ADR-003 (Logseq HTTP, sem gate `pgrep`).
+
+**Escopo `journal_forge_closed` only (decidido):** só findings com `check == "journal_forge_closed"` são aplicados — marcar task `DONE` no journal é reversível e de baixo risco, pois o Forge é a fonte autoritativa do estado (issue fechada = task pode ser marcada DONE). Writes de `cross_store_dedup` (descarte/promoção de entries NOTES) são destrutivos e exigem decisão por item — **deferidos a incremento futuro**.
+
+**Mecânica write-path (ADR-003):** `get_page_blocks_tree(page)` + `update_block(uuid, content)` — superfície nova em `logseq_http.py` sem dep Python nova nem contrato cross-repo. Nome de página journal pode variar por config do Logseq (ISO `YYYY-MM-DD` vs ordinal-US `Mon DDth, YYYY`); `_derive_logseq_page_name` tenta ISO primeiro, depois ordinal-US, usando retorno `[]` de `get_page_blocks_tree` como sinal page-not-found. Match de bloco por `content` exato (sem o prefixo `- ` de bullet — Logseq armazena conteúdo nu, consistente com o parser de `reconcile_check`).
+
+**Failure-open (consistente com SD17):** `LogseqHTTPError` → campo `error` no JSON de saída + campo `skipped` por task com `reason`; exit 0 para todos os erros de runtime (HTTP, page not found, bloco não encontrado). Entrada malformada (`--findings-json` inválido) → exit 1 via `ClickException` (erro de programação, não runtime). Skill sempre interpreta o JSON e exibe alerta quando `skipped` não-vazio. Sem fallback file-direct — escrita exclusiva via HTTP (Logseq open = serialização garantida pelo próprio Logseq, não pelo filesystem).
+
+**Gate config HTTP:** Step 6 verifica `~/.config/meta-bridge/config.json` antes de invocar o subcomando; ausente → informar e skip silente. Sem `AskUserQuestion` de confirmação por tipo (config ausente = não há servidor para acionar). Para casos com config presente, confirmação via `AskUserQuestion` (`Aplicar` / `Pular`) antes de qualquer mutação.
+
+**Promoção a ADR próprio NÃO disparou (loop fechado com SD17/F8 + SD18):** (a) ADR-003 já cobre o write-path HTTP como decisão estrutural com critério de erosão — `reconcile-apply` é **consumidor** desse substrato, não nova camada de integração externa; (b) `get_page_blocks_tree`/`update_block` estendem a superfície interna de `logseq_http.py` sem contrato cross-repo novo (mesma semântica dos consumidores ADR-003 existentes); (c) nenhuma regra nova de SSOT/dual-entry é codificada — o critério de promoção que SD17 deixou aberto ("se facetas B/C trouxerem decisão estrutural de SSOT/dual-entry") **não se materializa**: a faceta C aplica o estado do Forge como fonte autoritativa sem introduzir nova política de desempate; (d) o critério ADR-034 (iv) "sem nova categoria doutrinária" é satisfeito — materialização de subcomando write + Step skill no padrão estabelecido (SD1 mecânico/judgment + ADR-003 write-path). O caminho aberto por SD17 permanece para um v1 com estado persistido (`cross_store_dedup` writes, "reaparecer" cross-sessão) que introduziria persistência nova.
+
+**Cross-refs:** Sub-decisão 17 (esqueleto skill+hook+subcomando; faceta A read-only que SD19 estende com o Step 6 write); Sub-decisão 18 (faceta B dedup read-only; `cross_store_dedup` write deferido por esta SD); ADR-002 (subcomando determinístico mecânico; parsing-complexo → pytest, 20 cenários — `_derive_logseq_page_name` (ISO + fallback ordinal-US + stem inválido) + `_find_block_uuid` + `_mark_done` + CLI mock-HTTP (apply, fallback ISO→ordinal-US, page_not_found, update_error, block_not_found, partial-apply) — em `tests/test_reconcile_apply.py`); ADR-003 (write-path HTTP — substrato consumido, gate de config, loopback-only, sem dep nova); meta-system#54 / ADR-025 (contrato pai — loop fechado parcialmente; `cross_store_dedup` write + dedup canônico Journal↔Forge deferidos).
+
+**Cross-ref forge:** issue [`#48`](https://github.com/fppfurtado/meta-bridge/issues/48) (faceta C, materializada nesta SD).
+
+**4 critérios ADR-034 (Sub-decisão nova):** (i) **decisão central de SDs intacta** — estende SD17 (Step 6 na skill, módulo novo no pacote), não toca outras SDs; (ii) **categoria justifica SD** — write-modality é superfície nova sobre o ritual de abertura (primeiro write do reconciler), no padrão de catálogo (SD9/11/13/16/17/18); (iii) **sem restrição externa nova no pacote** — reusa `logseq_http.py` + ADR-003 (substrato existente), sem dep Python nova; (iv) **sem nova categoria doutrinária** — materialização de subcomando write no padrão SD1 mecânico/judgment + ADR-003.
+
 ## Consequências
 
 ### Benefícios
 
-- **15 sub-decisões cobrem 100% da mecânica das 9 skills + 4 hooks bridging** — execução fica tradução literal.
+- **19 sub-decisões cobrem 100% da mecânica das 11 skills + 5 hooks bridging** — execução fica tradução literal.
 - **Critérios "prop mecânica vs humana", "stop event + marker", "exclusão de hoje da janela" são exhaustivos** — sem decisões emergentes que diluem invariantes.
 - **Marker é contract público do toolkit** — qualquer plugin author pode reagir ao fim de `/run-plan` sem fork.
 - **Frontmatter roles vazio é honesto**: skills não inventam dependências em papéis.
