@@ -26,8 +26,9 @@ from pathlib import Path
 
 import click
 
-from . import _paths, logseq
-from .cli import cli, fail_if_logseq_open
+from . import _paths, logseq, logseq_http
+from .cli import cli, logseq_open
+from .logseq_http import LogseqHTTPError
 
 
 MRCONFIG_PATH = Path.home() / ".mrconfig"
@@ -247,6 +248,39 @@ def update_existing_page(
     return counts
 
 
+def _init_via_http(
+    base: str,
+    resolved_cluster: str,
+    resolved_subcluster: str,
+    repo: Path,
+    repo_host: str,
+) -> str:
+    """Cria/atualiza Project Page via Logseq HTTP API. Retorna 'criado'/'atualizado'.
+
+    HTTP path YAGNI: sem template replication (layout flat). `append_block_in_page`
+    cria a página se ausente; `upsert_block_property` no primeiro bloco seta/atualiza
+    as 4 props mecânicas (cluster, subcluster, repo-path, repo-host). LogseqHTTPError
+    propaga para o caller traduzir em exit 1.
+    """
+    tree = logseq_http.get_page_blocks_tree(base)
+    mode = "criado" if not tree else "atualizado"
+    if not tree:
+        logseq_http.append_block_in_page(base, "")
+        tree = logseq_http.get_page_blocks_tree(base) or []
+    if not tree:
+        raise LogseqHTTPError(f"falha ao criar/encontrar página {base!r} no grafo.")
+    block_uuid = tree[0]["uuid"]
+    props = {
+        "cluster": resolved_cluster,
+        "subcluster": resolved_subcluster,
+        "repo-path": str(repo),
+        "repo-host": repo_host,
+    }
+    for key, value in props.items():
+        logseq_http.upsert_block_property(block_uuid, key, value)
+    return mode
+
+
 @cli.command("init-project")
 @click.option("--repo-path", type=click.Path(file_okay=False, path_type=Path), default=None, help="Path do repo (default cwd).")
 @click.option("--basename", type=str, default=None, help="Override do basename (default=basename do repo-path).")
@@ -259,8 +293,6 @@ def init_project_cmd(
     subcluster: str,
 ) -> None:
     """Cria/atualiza Project Page no graph Logseq (idempotente)."""
-    fail_if_logseq_open()
-
     repo = (repo_path or Path.cwd()).resolve()
     # Verifica git repo
     rev = subprocess.run(
@@ -300,6 +332,25 @@ def init_project_cmd(
 
     repo_host = derive_repo_host(repo)
     description = extract_description(repo)
+
+    if logseq_open():
+        try:
+            mode = _init_via_http(
+                base, resolved_cluster, resolved_subcluster, repo, repo_host
+            )
+        except LogseqHTTPError as exc:
+            click.echo(
+                f"Logseq HTTP error — fechar o Logseq ou verificar o Local HTTP Server.\n{exc}",
+                err=True,
+            )
+            sys.exit(1)
+        click.echo(f"page: {base} (via HTTP)")
+        click.echo(f"mode: {mode}")
+        click.echo(f"cluster: {resolved_cluster} (source: {cluster_source})")
+        if resolved_subcluster:
+            click.echo(f"subcluster: {resolved_subcluster}")
+        click.echo(f"repo-host: {repo_host}")
+        return
 
     page_path = _paths.page_path(base)
     page_path.parent.mkdir(parents=True, exist_ok=True)
