@@ -29,9 +29,10 @@ from pathlib import Path
 
 import click
 
-from . import _paths, logseq
-from .cli import cli, fail_if_logseq_open
+from . import _paths, logseq, logseq_http
+from .cli import cli, logseq_open
 from .journal_note import bootstrap_journal, find_or_create_bucket
+from .logseq_http import LogseqHTTPError, logseq_page_name_candidates
 
 
 APPEND_HEADER = "## Append"
@@ -166,6 +167,132 @@ def apply_transition(
     return True, ""
 
 
+_BULLET_PREFIX_RE = re.compile(r"^\t+- ")
+
+
+def _strip_bullet_prefix(s: str) -> str:
+    """Remove prefixo `\t+- ` de bullet Logseq para obter o `content` da API.
+
+    Transitions sempre referenciam children indentados (tasks no journal);
+    blocos top-level (`- #bucket`) nunca são alvo de Transition — a regex
+    `^\t+- ` (≥1 TAB) é adequada por construção do payload do SKILL.md.
+    """
+    return _BULLET_PREFIX_RE.sub("", s, count=1)
+
+
+def _find_bucket_block(tree: list, domain: str) -> dict | None:
+    """Retorna bloco top-level cujo content é `#domain` (ou `#domain sufixo`)."""
+    prefix = f"#{domain}"
+    return next(
+        (b for b in tree if isinstance(b, dict)
+         and (b.get("content") == prefix or b.get("content", "").startswith(prefix + " "))),
+        None,
+    )
+
+
+def _find_block_uuid_recursive(tree: list, content: str) -> str | None:
+    for block in tree:
+        if not isinstance(block, dict):
+            continue
+        if block.get("content") == content:
+            return block.get("uuid")
+        found = _find_block_uuid_recursive(block.get("children") or [], content)
+        if found:
+            return found
+    return None
+
+
+def _close_append_via_http(
+    append_md: str, date_str: str, closed_ts: str
+) -> tuple[list[str], int]:
+    """Aplica seção Append via HTTP. Retorna (buckets_touched, groups_appended)."""
+    journal_path = _paths.journal_path(date_str)
+    candidates = logseq_page_name_candidates(str(journal_path))
+    if not candidates:
+        raise LogseqHTTPError(f"não foi possível derivar nome de página para {journal_path!r}.")
+
+    tree: list = []
+    page_name = candidates[0][0]
+    for name, _label in candidates:
+        blocks = logseq_http.get_page_blocks_tree(name)
+        if blocks:
+            tree = blocks
+            page_name = name
+            break
+
+    buckets_touched: list[str] = []
+    appended_total = 0
+
+    for bucket_name, children in parse_buckets(append_md):
+        groups = parse_child_groups(children)
+        if not groups:
+            continue
+        bucket = _find_bucket_block(tree, bucket_name)
+        if bucket is None:
+            logseq_http.append_block_in_page(page_name, f"#{bucket_name}")
+            tree = logseq_http.get_page_blocks_tree(page_name) or []
+            bucket = _find_bucket_block(tree, bucket_name)
+        if bucket is None:
+            raise LogseqHTTPError(f"falha ao criar/encontrar bucket #{bucket_name} em {page_name!r}.")
+        bucket_uuid = bucket["uuid"]
+        for group in groups:
+            child_content = _strip_bullet_prefix(group[0])
+            logseq_http.insert_block(bucket_uuid, child_content, sibling=False)
+            appended_total += 1
+        logseq_http.upsert_block_property(bucket_uuid, "closed", closed_ts)
+        buckets_touched.append(bucket_name)
+
+    return buckets_touched, appended_total
+
+
+def _close_transitions_via_http(
+    transitions: list[tuple[str, int, str, str]],
+) -> tuple[int, list[tuple[str, int, str]]]:
+    """Aplica Transitions via HTTP. Retorna (applied, skipped)."""
+    applied = 0
+    skipped: list[tuple[str, int, str]] = []
+
+    # Agrupar por path para minimizar chamadas get_page_blocks_tree.
+    path_groups: dict[str, list[tuple[int, str, str]]] = {}
+    for path_str, lineno, before, after in transitions:
+        path_groups.setdefault(path_str, []).append((lineno, before, after))
+
+    for path_str, path_trans in path_groups.items():
+        journal_path = Path(path_str).expanduser()
+        candidates = logseq_page_name_candidates(str(journal_path))
+        if not candidates:
+            for lineno, before, after in path_trans:
+                skipped.append((path_str, lineno, "page_name_unresolvable"))
+            continue
+        tree: list = []
+        page_name = candidates[0][0]
+        for name, _label in candidates:
+            blocks = logseq_http.get_page_blocks_tree(name)
+            if blocks:
+                tree = blocks
+                page_name = name
+                break
+        if not tree:
+            page_names = ",".join(n for n, _ in candidates)
+            for lineno, before, after in path_trans:
+                skipped.append((path_str, lineno, f"page_not_found:{page_names}"))
+            continue
+        for lineno, before, after in path_trans:
+            before_content = _strip_bullet_prefix(before)
+            after_content = _strip_bullet_prefix(after)
+            uuid = _find_block_uuid_recursive(tree, before_content)
+            if uuid is None:
+                skipped.append((path_str, lineno, "block_not_found"))
+                continue
+            try:
+                logseq_http.update_block(uuid, after_content)
+                applied += 1
+            except LogseqHTTPError as exc:
+                skipped.append((path_str, lineno, f"update_error: {exc}"))
+
+    return applied, skipped
+
+
 def upsert_bucket_closed_property(
     journal_path: Path, bucket: str, timestamp: str
 ) -> None:
@@ -226,8 +353,6 @@ def append_to_bucket(
 )
 def journal_close_cmd(date_override: str | None) -> None:
     """Aplica payload de fechamento de sessão lido de stdin (write engine)."""
-    fail_if_logseq_open()
-
     raw = sys.stdin.read()
     if not raw.strip():
         click.echo("payload stdin vazio — nada a aplicar.", err=True)
@@ -247,15 +372,6 @@ def journal_close_cmd(date_override: str | None) -> None:
         click.echo("  - <path>:<line> | <before> | <after>", err=True)
         sys.exit(1)
 
-    applied = 0
-    skipped: list[tuple[str, int, str]] = []
-    for path_str, lineno, before, after in transitions:
-        ok, motivo = apply_transition(Path(path_str), lineno, before, after)
-        if ok:
-            applied += 1
-        else:
-            skipped.append((path_str, lineno, motivo))
-
     if date_override is not None:
         try:
             d = datetime.date.fromisoformat(date_override)
@@ -269,9 +385,47 @@ def journal_close_cmd(date_override: str | None) -> None:
         date_str = datetime.date.today().strftime("%Y_%m_%d")
         closed_ts = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
 
-    journal_path = _paths.journal_path(date_str)
+    if logseq_open():
+        try:
+            # Transitions primeiro (Step 5a), depois Append (Step 5b) — mesma
+            # ordem do file-direct path; consistência de contrato per docstring.
+            applied, http_skipped = _close_transitions_via_http(transitions)
+            buckets_touched: list[str] = []
+            appended_total = 0
+            if append_md:
+                buckets_touched, appended_total = _close_append_via_http(
+                    append_md, date_str, closed_ts
+                )
+        except LogseqHTTPError as exc:
+            click.echo(
+                f"Logseq HTTP error — fechar o Logseq ou verificar o Local HTTP Server.\n{exc}",
+                err=True,
+            )
+            sys.exit(1)
+        journal_path = _paths.journal_path(date_str)
+        click.echo(f"journal: {journal_path} (via HTTP)")
+        if buckets_touched:
+            click.echo(f"buckets: {', '.join('#' + b for b in buckets_touched)}")
+        else:
+            click.echo("buckets: (nenhum — sem ## Append ou children vazios)")
+        click.echo(f"transitions: {applied} aplicadas, {len(http_skipped)} skipped")
+        for path_str, lineno, motivo in http_skipped:
+            click.echo(f"  skipped {path_str}:{lineno} — {motivo}", err=True)
+        click.echo(f"children groups: {appended_total} appended")
+        return
 
-    buckets_touched: list[str] = []
+    # Caminho file-direct (Logseq fechado)
+    applied = 0
+    skipped: list[tuple[str, int, str]] = []
+    for path_str, lineno, before, after in transitions:
+        ok, motivo = apply_transition(Path(path_str), lineno, before, after)
+        if ok:
+            applied += 1
+        else:
+            skipped.append((path_str, lineno, motivo))
+
+    journal_path = _paths.journal_path(date_str)
+    buckets_touched = []
     appended_total = 0
     dedup_total = 0
 
@@ -295,11 +449,7 @@ def journal_close_cmd(date_override: str | None) -> None:
         click.echo(f"buckets: {', '.join('#' + b for b in buckets_touched)}")
     else:
         click.echo("buckets: (nenhum — sem ## Append ou children vazios)")
-    click.echo(
-        f"transitions: {applied} aplicadas, {len(skipped)} skipped"
-    )
+    click.echo(f"transitions: {applied} aplicadas, {len(skipped)} skipped")
     for path_str, lineno, motivo in skipped:
         click.echo(f"  skipped {path_str}:{lineno} — {motivo}", err=True)
-    click.echo(
-        f"children groups: {appended_total} appended, {dedup_total} dedup-skipped"
-    )
+    click.echo(f"children groups: {appended_total} appended, {dedup_total} dedup-skipped")
