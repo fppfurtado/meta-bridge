@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.22.0 — 2026-06-28
+
+### Added
+
+- **Reconciler faceta C — write-path de reconciliações** (ADR-001 SD19): subcomando `mb reconcile-apply` marca tasks `DONE` no journal via HTTP (ADR-003) para reconciliações `journal_forge_closed`; Step 6 na skill `/reconcile` oferece a escrita com gate de confirmação por grupo — fecha o loop SD17+SD18 ([#56](https://github.com/fppfurtado/meta-bridge/pull/56)).
+- **Gate-kill das 4 skills de write — dual-path automático HTTP/file-direct** (ADR-001 SD20 + ADR-003 Adendo): `mb journal-note`, `journal-close`, `journal-review --apply` e `init-project` roteiam para o write-path HTTP quando o Logseq está **aberto** e para o file-direct quando fechado; gate `fail_if_logseq_open()` removido. Failure-closed no erro HTTP (exit 1, sem fallback file-direct — evita escrita concorrente). Paridade de integridade do append via HTTP: sub-bullets `commit:`/`plan:` preservados (`insert_block_group`), dedup por commit hash, refs/origem em buckets archived/emerging ([#57](https://github.com/fppfurtado/meta-bridge/pull/57)).
+
+### Fixed
+
+- **Resolução de página-journal via `:block/journal-day`**: o write-path HTTP (gate-kill) e o `mb reconcile-apply` (faceta C) passaram a resolver o nome canônico da página-journal por `journal-day` em vez de guessing de date-format ISO/ordinal — que nunca casava o formato `yyyy/MM/dd` do grafo real, deixando a faceta C latentemente quebrada. Validado ao vivo contra o grafo real ([#57](https://github.com/fppfurtado/meta-bridge/pull/57)).
+
 ## 0.21.0 — 2026-06-26
 
 ### Added
