@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 # journal-close
 
-Thin orchestrator do subcomando `mb journal-close` (CLI `meta-bridge`). Skill compõe payload editorial (síntese humano-amigável + transições in-place já decididas) e delega o write determinístico (find-or-create bucket, dedup por commit hash, modify-in-place atomic, bootstrap journal, gate Logseq) ao CLI.
+Thin orchestrator do subcomando `mb journal-close` (CLI `meta-bridge`). Skill compõe payload editorial (síntese humano-amigável + transições in-place já decididas) e delega o write determinístico (find-or-create bucket, dedup por commit hash, modify-in-place atomic, bootstrap journal) ao CLI. CLI roteia automaticamente: HTTP via Logseq Local HTTP Server quando Logseq aberto, file-direct quando fechado (ADR-003).
 
 Substância editorial (matching semântico, princípios de granularidade, filtros) é **heurístico-semântica** e **fica integralmente na skill**. CLI vira write engine — recebe payload via stdin e aplica writes sem refazer judgment.
 
@@ -32,8 +32,6 @@ Flags opcionais para janela de reconciliação prévia e destino do journal.
 ### 1. Gates editoriais (skill)
 
 `git rev-parse --show-toplevel` falha → recusa com `/journal-close exige git repo`. Exit clean.
-
-(Gate `pgrep -xi logseq` fica no CLI — failure-closed na chamada.)
 
 ### 2. Coleta context da sessão (heurístico-semântico — fica na skill)
 

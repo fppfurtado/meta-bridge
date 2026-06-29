@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 # journal-note
 
-Thin orchestrator do subcomando `mb journal-note` (CLI `meta-bridge`). Skill prepara argumentos a partir do contexto CC e delega o write substantivo (find-or-create bucket idempotente, bootstrap journal via template, sub-bullets mecânicos `commit:`/`plan:`, gate `pgrep -xi logseq`) ao CLI.
+Thin orchestrator do subcomando `mb journal-note` (CLI `meta-bridge`). Skill prepara argumentos a partir do contexto CC e delega o write substantivo (find-or-create bucket idempotente, bootstrap journal via template, sub-bullets mecânicos `commit:`/`plan:`) ao CLI. CLI roteia automaticamente: HTTP via Logseq Local HTTP Server quando Logseq aberto, file-direct quando fechado (ADR-003).
 
 Substância em [ADR-001](../../docs/decisions/ADR-001-skills-de-bridge.md) Sub-decisão 1 (+ Adendos) e [ADR-002](../../docs/decisions/ADR-002-materializacao-cli-mb.md) (cascateamento thin orchestrator).
 
@@ -40,7 +40,7 @@ Convention de naming em [ADR-002 do logseq-notes Sub-decisão 3](https://github.
 
 `Bash mb journal-note --domain "<domain>" "<conteúdo>"`. Output reporta journal/bucket/marker/sub-bullets — repassar ao operador.
 
-Exit code não-zero → reportar mensagem stderr ao operador (gate Logseq aberto, content vazio etc.).
+Exit code não-zero → reportar mensagem stderr ao operador (content vazio, erro HTTP etc.).
 
 ## O que NÃO fazer
 

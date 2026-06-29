@@ -27,14 +27,16 @@ from pathlib import Path
 import click
 from rapidfuzz.distance import Levenshtein
 
-from . import _paths, logseq
-from .cli import cli, fail_if_logseq_open
+from . import _paths, logseq, logseq_http
+from .cli import cli, logseq_open
 from .journal_close import (
     TRANSITION_RE,
     _decode_escapes,
+    _close_transitions_via_http,
     apply_transition,
 )
 from .journal_note import bootstrap_journal, find_or_create_bucket
+from .logseq_http import LogseqHTTPError, resolve_journal_tree
 
 
 # Subset de markers GTD que o scan CLASSIFICA. CANCELLED (e demais do superset
@@ -721,22 +723,15 @@ def apply_hygiene(entries: list[tuple[str, str]]) -> tuple[int, int, list[str]]:
     return applied, skipped, msgs
 
 
-def run_apply_mode() -> None:
-    """Read payload from stdin (transitions + optional structural/hygiene), apply.
+def _parse_apply_payload(raw: str) -> tuple[list, list, list, list, list]:
+    """Parse do payload stdin de `--apply` → (transitions, archived, emerging,
+    hygiene, phantom). Compartilhado entre o file-direct `run_apply_mode` e o
+    path HTTP — fonte única, evita divergência de parsing/erro entre os dois.
 
-    Payload supports:
-    - `- <path>:<line> | <before> | <after>` (legacy task-level transitions)
-    - `## Structural` section with `### Archived buckets` + `### Emerging buckets`
-      (apply estrutural per ADR-001 SD10 Adendo v0.4.0)
-    - `## Hygiene` section with `### Co-occurrence`/`### Rename-implicit`/
-      `### Naming-drift` (apply aditivo forward-only per SD10 Adendo 2026-06-24)
+    TRANSITION_RE casa toda linha independente de seção; entries archived/emerging
+    têm 3+/2 campos sem `:linha`, não colidem. Contrato forward (Bloco 4): a skill
+    compõe `## Hygiene` SEM o shape `<path>:<linha> | <a> | <b>` (usa page-refs).
     """
-    raw = sys.stdin.read()
-    # TRANSITION_RE casa toda linha do payload independente de seção; entries
-    # archived/emerging têm 3+/2 campos sem `:linha`, não colidem com o pattern.
-    # Contrato forward (Bloco 4): a skill compõe sugestões de `## Hygiene` SEM o
-    # shape `<path>:<linha> | <a> | <b>` (usa page-refs `[[...]]`) — senão uma
-    # sugestão free-text casaria TRANSITION_RE e viraria write destrutivo num journal.
     transitions: list[tuple[str, int, str, str]] = []
     for line in raw.splitlines():
         m = TRANSITION_RE.match(line)
@@ -749,21 +744,200 @@ def run_apply_mode() -> None:
                     _decode_escapes(m.group(4)),
                 )
             )
-
     archived, emerging = parse_structural(raw)
     hygiene = parse_hygiene(raw)
     phantom = parse_phantom(raw)
+    return transitions, archived, emerging, hygiene, phantom
+
+
+def _echo_apply_empty_error() -> None:
+    """Mensagem de erro de payload vazio/inválido — compartilhada file-direct/HTTP."""
+    click.echo(
+        "--apply: nenhuma transição nem entry structural/hygiene/phantom parseável (stdin vazio ou formato inválido). Formatos:",
+        err=True,
+    )
+    click.echo("  - <path>:<line> | <before> | <after>", err=True)
+    click.echo("  ## Structural / ### Archived buckets / - bucket | categoria | refs", err=True)
+    click.echo("  ## Structural / ### Emerging buckets / - canonical | origem", err=True)
+    click.echo("  ## Hygiene / ### Co-occurrence|Rename-implicit|Naming-drift / - sugestão", err=True)
+    click.echo("  ## Phantom fixes / - <path>:<line> | <raw-match>", err=True)
+
+
+def _iter_block_contents(tree: list):
+    """Itera recursivamente o `content` de todos os blocos da árvore Logseq.
+
+    Base dos guards de idempotência HTTP de archived/hygiene — paridade barata
+    com o match textual contra a page inteira do file-direct.
+    """
+    for block in tree:
+        if not isinstance(block, dict):
+            continue
+        yield block.get("content", "")
+        yield from _iter_block_contents(block.get("children") or [])
+
+
+def _find_block_containing(tree: list, substr: str) -> tuple[str, str] | None:
+    """Retorna (uuid, content) do primeiro bloco cujo content contenha `substr`.
+
+    Recursivo (testa children). Usado pelo phantom HTTP path para localizar o
+    bloco a corrigir sem depender do número de linha (indisponível na API).
+    """
+    for block in tree:
+        if not isinstance(block, dict):
+            continue
+        content = block.get("content", "")
+        if substr in content:
+            return block.get("uuid"), content
+        found = _find_block_containing(block.get("children") or [], substr)
+        if found:
+            return found
+    return None
+
+
+def _run_apply_via_http(
+    transitions: list[tuple[str, int, str, str]],
+    archived: list[dict],
+    emerging: list[dict],
+    hygiene: list[tuple[str, str]],
+    phantom: list[dict],
+) -> None:
+    """Apply mode via Logseq HTTP API. LogseqHTTPError propaga para o caller."""
+    # 1. Transitions — idêntico ao journal_close HTTP path
+    applied_tr, skipped_tr = _close_transitions_via_http(transitions)
+    if transitions:
+        click.echo(f"transitions: {applied_tr} aplicadas, {len(skipped_tr)} skipped")
+        for path_str, lineno, motivo in skipped_tr:
+            click.echo(f"  skipped {path_str}:{lineno} — {motivo}", err=True)
+
+    # 2. Archived buckets — find-or-create por categoria + refs como sub-bullets
+    #    (paridade com apply_archived_bucket: refs path:line válidos viram filhos).
+    #    Idempotente: #bucket já mencionado na page → skip. A estrutura de seção
+    #    `## Buckets arquivados` é YAGNI no HTTP path (append flat).
+    if archived:
+        applied_arch = 0
+        skipped_arch = 0
+        cat_contents: dict[str, list[str]] = {}
+        for entry in archived:
+            categoria = entry["categoria"]
+            bucket = entry["bucket"]
+            if categoria not in cat_contents:
+                cat_contents[categoria] = list(
+                    _iter_block_contents(logseq_http.get_page_blocks_tree(categoria))
+                )
+            bucket_re = re.compile(rf"(?:^|\s)#{re.escape(bucket)}(?:$|\s)")
+            if any(bucket_re.search(c) for c in cat_contents[categoria]):
+                skipped_arch += 1
+                continue
+            result = logseq_http.append_block_in_page(categoria, f"#{bucket}")
+            bucket_uuid = result.get("uuid") if isinstance(result, dict) else None
+            if bucket_uuid:
+                # refs path:line válidos (arquivo existe) viram filhos — mesma
+                # validação fail-soft do file-direct (refs inválidos são dropados).
+                for ref in entry.get("refs") or []:
+                    m = re.match(r"^(.+?):(\d+)$", ref)
+                    if m and Path(m.group(1)).exists():
+                        logseq_http.insert_block(bucket_uuid, ref, sibling=False)
+            cat_contents[categoria].append(f"#{bucket}")
+            applied_arch += 1
+            click.echo(f"  archived: #{bucket} → {categoria}")
+        click.echo(f"structural: {applied_arch} archived, {skipped_arch} dedup-skipped (HTTP)")
+
+    # 3. Emerging buckets — find-or-create no journal de hoje + sub-bullet origem
+    #    (paridade com apply_emerging_bucket). find_or_create_bucket_block robusto
+    #    ao journal inexistente; origem idempotente (não re-insere se já presente).
+    if emerging:
+        today_filename = datetime.date.today().strftime("%Y_%m_%d")
+        journal_path = str(_paths.journal_path(today_filename))
+        applied_emerg = 0
+        for entry in emerging:
+            canonical = entry["canonical"]
+            origem = entry.get("origem")
+            page_name, bucket = logseq_http.find_or_create_bucket_block(journal_path, canonical)
+            if page_name is None:
+                raise LogseqHTTPError(
+                    f"não foi possível derivar nome de página para {journal_path!r}."
+                )
+            if bucket is None:
+                raise LogseqHTTPError(f"falha ao criar/encontrar bucket #{canonical} em {page_name!r}.")
+            if origem:
+                origem_content = f"(origem: {origem})"
+                children = [
+                    c.get("content", "") for c in (bucket.get("children") or []) if isinstance(c, dict)
+                ]
+                if origem_content not in children:
+                    logseq_http.insert_block(bucket["uuid"], origem_content, sibling=False)
+            applied_emerg += 1
+            click.echo(f"  emerging: #{canonical} em {page_name}")
+        click.echo(f"structural: {applied_emerg} emerging (HTTP)")
+
+    # 4. Hygiene — append flat por entry. Idempotente: sugestão (match exato) já
+    #    presente → skip (paridade com apply_hygiene). Section structure por tipo
+    #    é YAGNI no HTTP path.
+    if hygiene:
+        applied_hyg = 0
+        skipped_hyg = 0
+        existing_hyg = set(
+            _iter_block_contents(logseq_http.get_page_blocks_tree(HYGIENE_PAGE))
+        )
+        for _, suggestion in hygiene:
+            if suggestion in existing_hyg:
+                skipped_hyg += 1
+                continue
+            logseq_http.append_block_in_page(HYGIENE_PAGE, suggestion)
+            existing_hyg.add(suggestion)
+            applied_hyg += 1
+        click.echo(f"hygiene: {applied_hyg} sugestões aplicadas, {skipped_hyg} dedup-skipped (HTTP)")
+
+    # 5. Phantom fixes — substring match em content do bloco + update
+    if phantom:
+        applied_ph = 0
+        skipped_ph = 0
+        by_path: dict[str, list[dict]] = defaultdict(list)
+        for e in phantom:
+            by_path[e["path"]].append(e)
+        for path_str, ents in by_path.items():
+            p = Path(path_str).expanduser()
+            # Journal (stem YYYY_MM_DD) → resolve por journal-day; page → None,
+            # cai no path relativo a PAGES_DIR.
+            ph_page, ph_tree = resolve_journal_tree(str(p))
+            if ph_page is None:
+                try:
+                    ph_page = str(p.relative_to(_paths.PAGES_DIR))[:-3]
+                except ValueError:
+                    skipped_ph += len(ents)
+                    continue
+                ph_tree = logseq_http.get_page_blocks_tree(ph_page) or []
+            if not ph_tree:
+                skipped_ph += len(ents)
+                continue
+            for e in ents:
+                raw = e["raw"]
+                fixed = raw[:-1] + " " + raw[-1]
+                result = _find_block_containing(ph_tree, raw)
+                if result is None:
+                    skipped_ph += 1
+                    continue
+                uuid, block_content = result
+                logseq_http.update_block(uuid, block_content.replace(raw, fixed, 1))
+                applied_ph += 1
+        click.echo(f"phantom: {applied_ph} fixes aplicados ({skipped_ph} skipped)")
+
+
+def run_apply_mode() -> None:
+    """Read payload from stdin (transitions + optional structural/hygiene), apply.
+
+    Payload supports:
+    - `- <path>:<line> | <before> | <after>` (legacy task-level transitions)
+    - `## Structural` section with `### Archived buckets` + `### Emerging buckets`
+      (apply estrutural per ADR-001 SD10 Adendo v0.4.0)
+    - `## Hygiene` section with `### Co-occurrence`/`### Rename-implicit`/
+      `### Naming-drift` (apply aditivo forward-only per SD10 Adendo 2026-06-24)
+    """
+    raw = sys.stdin.read()
+    transitions, archived, emerging, hygiene, phantom = _parse_apply_payload(raw)
 
     if not transitions and not archived and not emerging and not hygiene and not phantom:
-        click.echo(
-            "--apply: nenhuma transição nem entry structural/hygiene/phantom parseável (stdin vazio ou formato inválido). Formatos:",
-            err=True,
-        )
-        click.echo("  - <path>:<line> | <before> | <after>", err=True)
-        click.echo("  ## Structural / ### Archived buckets / - bucket | categoria | refs", err=True)
-        click.echo("  ## Structural / ### Emerging buckets / - canonical | origem", err=True)
-        click.echo("  ## Hygiene / ### Co-occurrence|Rename-implicit|Naming-drift / - sugestão", err=True)
-        click.echo("  ## Phantom fixes / - <path>:<line> | <raw-match>", err=True)
+        _echo_apply_empty_error()
         sys.exit(1)
 
     # Transitions primeiro (preserva semântica v0.3.0), structural depois
@@ -849,9 +1023,22 @@ def journal_review_cmd(
     rename_gap_journals: int,
 ) -> None:
     """Scan mecânico de markers/DONE/narrativas/buckets + candidatos v2 em janela; apply via stdin."""
-    fail_if_logseq_open()
-
     if apply_mode:
+        if logseq_open():
+            try:
+                raw = sys.stdin.read()
+                transitions, archived, emerging, hygiene, phantom = _parse_apply_payload(raw)
+                if not transitions and not archived and not emerging and not hygiene and not phantom:
+                    _echo_apply_empty_error()
+                    sys.exit(1)
+                _run_apply_via_http(transitions, archived, emerging, hygiene, phantom)
+            except LogseqHTTPError as exc:
+                click.echo(
+                    f"Logseq HTTP error — fechar o Logseq ou verificar o Local HTTP Server.\n{exc}",
+                    err=True,
+                )
+                sys.exit(1)
+            return
         run_apply_mode()
         return
 

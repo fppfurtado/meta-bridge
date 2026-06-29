@@ -1051,6 +1051,22 @@ Materializa a **faceta C** de 3 do reconciler ([#48](https://github.com/fppfurta
 
 **4 critérios ADR-034 (Sub-decisão nova):** (i) **decisão central de SDs intacta** — estende SD17 (Step 6 na skill, módulo novo no pacote), não toca outras SDs; (ii) **categoria justifica SD** — write-modality é superfície nova sobre o ritual de abertura (primeiro write do reconciler), no padrão de catálogo (SD9/11/13/16/17/18); (iii) **sem restrição externa nova no pacote** — reusa `logseq_http.py` + ADR-003 (substrato existente), sem dep Python nova; (iv) **sem nova categoria doutrinária** — materialização de subcomando write no padrão SD1 mecânico/judgment + ADR-003.
 
+### Sub-decisão 20 — Gate-kill das 4 skills do plugin: dual-path automático (#43)
+
+Materializa o follow-up deferido em [ADR-003](ADR-003-write-path-http-logseq-local-http-server.md) § Alternativas (backend-switch imediato): os 4 subcomandos de write (`mb journal-note`, `mb journal-close`, `mb journal-review --apply`, `mb init-project`) ganham **dual-path automático** via `logseq_open()` — HTTP quando Logseq aberto, file-direct quando fechado. Gate `fail_if_logseq_open()` removido dos 4 command-handlers.
+
+**Padrão:** `if logseq_open(): _cmd_via_http(...); return`. Failure-closed no HTTP error: `LogseqHTTPError` → exit 1 sem fallback file-direct (fallback arriscaria escrita concorrente — mesma proteção que o gate original). Scan mode de `journal-review` (sem `--apply`) é read-only e nunca gated — remoção do `fail_if_logseq_open()` apenas uniformiza.
+
+**`init-project` HTTP YAGNI:** `upsert_block_property` no primeiro bloco para as 4 props mecânicas (cluster, subcluster, repo-path, repo-host); sem template replication, sem macro substitution, sem description. File-direct preserva o create canônico com template.
+
+**Paridade de integridade do append + resolução por `journal-day` (validação ao vivo, 2026-06-28):** o append HTTP de `journal-note`/`journal-close` preserva sub-bullets (`insert_block_group`) e dedup por commit hash — não é YAGNI-flat (perda seria silenciosa no caminho default). A validação ao vivo revelou que o nome de página-journal depende do "Preferred date format" do Logseq (`yyyy/MM/dd` no grafo real, não ISO); resolução migrou para `logseq_http.resolve_journal_page_name` via `:block/journal-day` (robusto), adotada também pelo `reconcile-apply` (SD19, que estava latentemente quebrado neste grafo). Detalhes no [ADR-003](ADR-003-write-path-http-logseq-local-http-server.md) § Adendo 2026-06-28.
+
+**Limitação SD12 (persistente):** hook `suggest_enrich_blocks` retém sua gate (iii) "Logseq fechado" — `enrich.py` escreve file-direct; mitigação futura (HTTP path para `enrich.py`) deferida a backlog.
+
+**Sem SD nova para journal_review:** scan mode era trivialmente read-only; nenhum padrão de escrita novo emerge — apenas remoção de gate e adição de dual-path no apply mode seguindo o padrão desta SD20.
+
+**Cross-refs:** ADR-003 (substrato HTTP + adendo 2026-06-28 documentando este gate-kill); ADR-002 (padrão command-handler); issue [`#43`](https://github.com/fppfurtado/meta-bridge/issues/43).
+
 ## Consequências
 
 ### Benefícios

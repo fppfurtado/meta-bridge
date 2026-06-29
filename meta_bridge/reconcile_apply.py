@@ -10,44 +10,16 @@ Tasks não encontradas ou com erro de update → campo `skipped[].reason`, exit 
 
 from __future__ import annotations
 
-import calendar
 import json
 import re
-from pathlib import Path
 
 import click
 
 from . import logseq_http
 from .cli import cli
-from .logseq_http import LogseqHTTPError
+from .logseq_http import LogseqHTTPError, resolve_journal_tree
 
 _MARKER_RE = re.compile(r"^(TODO|DOING|WAITING|NOW|LATER)\s")
-
-
-def _ordinal_suffix(day: int) -> str:
-    if 11 <= day <= 13:
-        return "th"
-    return {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
-
-
-def _derive_logseq_page_name(journal_path: str | Path) -> list[tuple[str, str]]:
-    """Retorna lista de candidatos `[(name, label)]` em ordem de tentativa.
-
-    1. ISO `YYYY-MM-DD` — formato padrão mais comum no Logseq.
-    2. Ordinal US `Mon DDth, YYYY` — formato alternativo (ex.: `Jun 27th, 2026`).
-
-    O chamador tenta cada candidato via `get_page_blocks_tree`; usa o primeiro
-    que retorna lista não-vazia. Lista vazia → página não encontrada no grafo.
-    """
-    stem = Path(journal_path).expanduser().stem  # ex.: "2026_06_27"
-    try:
-        year, month, day = (int(p) for p in stem.split("_"))
-    except (ValueError, AttributeError):
-        return []
-    iso = f"{year:04d}-{month:02d}-{day:02d}"
-    month_abbr = calendar.month_abbr[month]  # ex.: "Jun"
-    ordinal = f"{month_abbr} {day}{_ordinal_suffix(day)}, {year}"
-    return [(iso, "ISO"), (ordinal, "ordinal-US")]
 
 
 def _find_block_uuid(tree: list, task_text: str) -> str | None:
@@ -99,25 +71,10 @@ def reconcile_apply(findings_json: str, journal_path: str) -> None:
         click.echo(json.dumps({"applied": [], "skipped": [], "error": None}, ensure_ascii=False))
         return
 
-    candidates = _derive_logseq_page_name(journal_path)
-    if not candidates:
-        click.echo(json.dumps({
-            "applied": [],
-            "skipped": [{"task": f["task"], "reason": "page_name_unresolvable"} for f in targets],
-            "error": None,
-        }, ensure_ascii=False))
-        return
-
-    # Tentar cada candidato até achar página com blocos.
-    tree: list = []
-    used_page: str | None = None
+    # Resolve o journal via journal-day (robusto ao "Preferred date format" do
+    # Logseq — yyyy/MM/dd, ISO, ordinal, etc.; guessing de formato não cobre todos).
     try:
-        for name, _label in candidates:
-            blocks = logseq_http.get_page_blocks_tree(name)
-            if blocks:
-                tree = blocks
-                used_page = name
-                break
+        used_page, tree = resolve_journal_tree(journal_path)
     except LogseqHTTPError as exc:
         click.echo(json.dumps({
             "applied": [],
@@ -126,12 +83,19 @@ def reconcile_apply(findings_json: str, journal_path: str) -> None:
         }, ensure_ascii=False))
         return
 
+    if used_page is None:
+        click.echo(json.dumps({
+            "applied": [],
+            "skipped": [{"task": f["task"], "reason": "page_name_unresolvable"} for f in targets],
+            "error": None,
+        }, ensure_ascii=False))
+        return
+
     if not tree:
-        page_names = ",".join(n for n, _ in candidates)
         click.echo(json.dumps({
             "applied": [],
             "skipped": [
-                {"task": f["task"], "reason": f"page_not_found:{page_names}"}
+                {"task": f["task"], "reason": f"page_not_found:{used_page}"}
                 for f in targets
             ],
             "error": None,

@@ -66,8 +66,39 @@ Descartada: wrappers disponíveis são finos e não-mantidos; adicionar dep cont
 
 ### Backend-switch imediato no write engine (matar o gate `pgrep` agora)
 
-Descartada para este escopo: refatorar `journal_close`/`journal_note`/`logseq.py` atrás de abstração de backend é ≥3 facetas e acopla o substrato à migração das skills do plugin. Deferido como follow-up — o substrato thin prova o primitivo primeiro e desbloqueia #154/#42 sem o custo da migração.
+Descartada para o escopo original deste ADR: refatorar `journal_close`/`journal_note`/`logseq.py` atrás de abstração de backend acopla o substrato à migração das skills do plugin. Deferido como follow-up — o substrato thin prova o primitivo primeiro. Follow-up materializado em [#43](https://github.com/fppfurtado/meta-bridge/issues/43) (ver **Adendo 2026-06-28** abaixo).
 
 ### Token via `settings.json` env (precedente do secret MCP)
 
 Descartada: reusa precedente mas acopla o token de escrita do grafo ao runtime do Claude Code. Arquivo de config dedicado mantém o secret desacoplado e legível por qualquer consumidor cross-process do `mb`.
+
+## Adendo 2026-06-28 — Gate-kill das 4 skills do plugin (#43)
+
+Issue [#43](https://github.com/fppfurtado/meta-bridge/issues/43) materializa o follow-up deferido na alternativa "Backend-switch imediato" acima: os 4 subcomandos de write das skills do plugin (`mb journal-note`, `mb journal-close`, `mb journal-review --apply`, `mb init-project`) ganham **dual-path automático** — HTTP quando Logseq aberto, file-direct quando fechado. Gate `fail_if_logseq_open()` removido de todos os 4.
+
+**Padrão de implementação (ADR-001 SD20):** cada command-handler verifica `logseq_open()` (wrapper em `cli.py` sobre `pgrep -xi logseq`):
+
+```python
+if logseq_open():
+    try:
+        _cmd_via_http(...)
+    except LogseqHTTPError as exc:
+        click.echo(f"Logseq HTTP error — fechar o Logseq ou verificar o Local HTTP Server.\n{exc}", err=True)
+        sys.exit(1)
+    return
+# caminho file-direct inalterado abaixo
+```
+
+**Failure-closed no HTTP error**: `LogseqHTTPError` → mensagem clara + exit 1 (sem fallback file-direct). Rationale: fallback file-direct com Logseq aberto arriscaria escrita concorrente — exatamente o que o gate original protegia. O operador deve fechar o Logseq ou corrigir o Local HTTP Server antes de retentar.
+
+**`journal_review --apply` ungated no scan mode**: `--apply` recebe o dual-path; scan mode (sem flag) é read-only e nunca foi gated. Removido o `fail_if_logseq_open()` que aplicava gate indiscriminado.
+
+**`init-project` HTTP: YAGNI flat layout**: HTTP path usa `get_page_blocks_tree(base)` para detectar create vs update; `append_block_in_page` para criar a página se ausente; `upsert_block_property` no primeiro bloco para as 4 props mecânicas (cluster, subcluster, repo-path, repo-host). **Sem** replicação de template (sem bootstrap_from_template), sem macro substitution, sem description, sem preservação de props humanas in-place — escopo YAGNI; file-direct path permanece o caminho canônico com template para creates ricos.
+
+**Paridade de integridade do append (`journal-close` + `journal-note`)**: o append HTTP **não** é YAGNI-flat — espelha a integridade do file-direct, porque essas skills viram o caminho default (Logseq normalmente aberto) e a perda seria silenciosa. (i) **Sub-bullets preservados**: `logseq_http.insert_block_group(parent_uuid, group_lines)` reconstrói via `insertBlock` a árvore que o file-direct escreveria como linhas indentadas — child nível 1 sob o bucket, sub-bullets `commit:`/`plan:` nível 2 sob o child (uuid retornado por `insertBlock`; sem uuid → ancora no parent, degrada nesting mas não perde dado). Sem isso, só `group[0]` chegaria ao grafo. (ii) **Dedup por commit hash**: `_close_append_via_http` coleta os hashes `commit:<x>` da subárvore do bucket (`_bucket_commit_hashes`) e pula grupos já presentes — paridade com `existing_commit_hashes_in_bucket`; o contador `dedup-skipped` volta ao output. **Matching de transitions** permanece por conteúdo exato do bloco (a API não expõe nº de linha) — divergência inerente vs. o `:line` do file-direct, aceitável.
+
+**`journal-review --apply` HTTP: idempotência sim, estrutura de seção não**: archived e hygiene ganham o guard barato de idempotência (skip se `#bucket` já mencionado na category page / sugestão já presente em `bucket-hygiene.md` — paridade com `apply_archived_bucket`/`apply_hygiene`), evitando duplicação em re-run. O que permanece YAGNI é só a **estrutura de seção** (`## Buckets arquivados`, headings por tipo de higiene): o HTTP path faz append flat. Emerging já checava presença antes deste fix.
+
+**Resolução de página-journal por `journal-day` (achado de validação ao vivo, 2026-06-28)**: a validação manual com Logseq aberto revelou que o nome canônico das páginas-journal depende do "Preferred date format" do operador — no grafo real é `yyyy/MM/dd` (ex.: `2026/06/28`), **não** ISO nem ordinal-US. O guessing de formato original (`logseq_page_name_candidates` → ISO + ordinal) **nunca casava** este grafo: todo lookup de journal falhava (`page_not_found`), quebrando o write-path HTTP de `journal-note`/`journal-close`/`journal-review` **e** o `reconcile-apply` já shipado (faceta C, SD19). Correção: `logseq_http.resolve_journal_page_name` resolve o nome canônico via datascript `[:block/journal-day <YYYYMMDD>]` — robusto a qualquer date-format — e `resolve_journal_tree` o usa, caindo nos candidatos de formato só no create-path de journal inexistente. Os 5 sites de resolução (incl. `reconcile-apply`) passaram a usá-lo. Dois sub-achados correlatos corrigidos na mesma passada: (i) `find_bucket_block` compara a **primeira linha** do content (buckets com `closed::` têm content `#dev\n<props>` — comparação ingênua criava buckets duplicados em re-run); (ii) `find_or_create_bucket_block` faz retry no nome canônico após o create (o 1º `appendBlockInPage` num journal inexistente materializa a página mas não landa o bloco — quirk do Logseq). Todas as 3 modalidades (note/close/transition) + `reconcile-apply` validadas ao vivo contra o grafo real, incl. dedup por commit hash e journal nunca-existido.
+
+**Limitação SD12 (enrich-blocks hook persiste com gate)**: o hook `suggest_enrich_blocks` mantém sua gate (iii) "Logseq fechado" — o sub-tool `enrich.py` escreve file-direct; executá-lo com Logseq aberto arriscaria corrupção. Esta limitação é conhecida e documentada: o hook não dispara quando Logseq está aberto, mesmo após o gate-kill das skills. Mitigação futura: HTTP path para `enrich.py` (deferido a backlog).
